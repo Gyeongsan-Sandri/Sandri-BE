@@ -1,6 +1,9 @@
 spring:
-  application:
-    name: meal-ticket-system-was
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    defer-datasource-initialization: true
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -8,8 +11,9 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
 
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    defer-datasource-initialization: true
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
