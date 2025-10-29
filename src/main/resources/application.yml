@@ -18,3 +18,11 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     operationsSorter: method
+
+google:
+  maps:
+    api-key: ${GOOGLE_MAPS_API_KEY:your-pop-google-maps-api-key-here}
+    base-url: https://maps.googleapis.com/maps/api
+
+app:
+  base-url: ${APP_BASE_URL:http://localhost:8080}
