@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.route.dto.*;
+import sandri.sandriweb.domain.route.service.GoogleMapsService;
 import sandri.sandriweb.domain.route.service.RouteService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
@@ -26,6 +27,7 @@ public class RouteController {
     
     private final RouteService routeService;
     private final UserRepository userRepository;
+    private final GoogleMapsService googleMapsService;
     
     @PostMapping
     @Operation(summary = "루트 생성", description = "새로운 여행 루트를 생성합니다")
@@ -271,6 +273,26 @@ public class RouteController {
         } else {
             return ResponseEntity.notFound().build();
         }
+    }
+    
+    @GetMapping("/places/search")
+    @Operation(summary = "장소 검색", description = "Google Maps API를 사용하여 장소를 검색합니다. API 키가 없으면 더미 데이터를 반환합니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "검색 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    public ResponseEntity<ApiResponseDto<PlaceSearchResponseDto>> searchPlaces(
+            @RequestParam String query) {
+        
+        log.info("장소 검색 요청: query={}", query);
+        
+        if (query == null || query.trim().isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("검색어를 입력해주세요."));
+        }
+        
+        PlaceSearchResponseDto result = googleMapsService.searchPlacesDto(query.trim());
+        return ResponseEntity.ok(ApiResponseDto.success(result));
     }
 }
 
