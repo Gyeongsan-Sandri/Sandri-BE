@@ -13,17 +13,11 @@
 ### 주요 API 엔드포인트
 
 #### 인증 관련 API (`/api/auth`)
+- `POST /api/auth/register` - 회원가입(단일 단계)
 - `POST /api/auth/login` - 로그인
-- `POST /api/auth/register/step1` - 회원가입 1단계 (개인정보 입력)
-- `POST /api/auth/verification/send` - 인증번호 발송
-- `POST /api/auth/verification/verify` - 휴대폰 인증
-- `POST /api/auth/register/step2` - 회원가입 2단계 (계정 정보 입력)
 
 #### 사용자 관련 API (`/api/user`)
 - `GET /api/user/profile` - 사용자 프로필 조회
-
-#### 공통 API (`/api/common`)
-- `GET /api/common/telecom-carriers` - 통신사 목록 조회
 
 ### 환경 변수 설정
 ```bash

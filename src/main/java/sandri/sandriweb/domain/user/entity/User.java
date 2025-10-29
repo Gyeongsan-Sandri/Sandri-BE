@@ -36,13 +36,12 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private Gender gender;
     
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private TelecomCarrier telecomCarrier;
+    @Column(nullable = false, length = 100)
+    private String location;
     
-    @Column(nullable = false, length = 20)
-    private String phoneNumber;
-    
+    @Column(length = 30)
+    private String referrerUsername;
+
     @Column(nullable = false, unique = true, length = 30)
     private String nickname;
     
@@ -51,9 +50,6 @@ public class User implements UserDetails {
     
     @Column(nullable = false)
     private String password;
-    
-    @Column(nullable = false)
-    private boolean phoneVerified;
     
     @Column(nullable = false)
     private boolean enabled;
@@ -111,23 +107,7 @@ public class User implements UserDetails {
         return enabled;
     }
     
-    public void updatePassword(String password) {
-        this.password = password;
-    }
-    
-    public void verifyPhone() {
-        this.phoneVerified = true;
-    }
-    
-    public void enable() {
-        this.enabled = true;
-    }
-    
     public enum Gender {
         MALE, FEMALE, OTHER
-    }
-    
-    public enum TelecomCarrier {
-        KT, SKT, LG_U_PLUS, KT_MVNO, SKT_MVNO, LG_U_PLUS_MVNO
     }
 }

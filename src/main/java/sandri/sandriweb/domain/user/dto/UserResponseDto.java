@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import sandri.sandriweb.domain.user.entity.User;
 
+import java.time.LocalDate;
+
 @Getter
 @Builder
 @NoArgsConstructor
@@ -16,10 +18,10 @@ public class UserResponseDto {
     private String name;
     private String nickname;
     private String username;
-    private String phoneNumber;
+    private LocalDate birthDate;
     private User.Gender gender;
-    private User.TelecomCarrier telecomCarrier;
-    private boolean phoneVerified;
+    private String location;
+    private String referrerUsername;
     private boolean enabled;
     
     public static UserResponseDto from(User user) {
@@ -28,10 +30,10 @@ public class UserResponseDto {
                 .name(user.getName())
                 .nickname(user.getNickname())
                 .username(user.getUsername())
-                .phoneNumber(user.getPhoneNumber())
+                .birthDate(user.getBirthDate())
                 .gender(user.getGender())
-                .telecomCarrier(user.getTelecomCarrier())
-                .phoneVerified(user.isPhoneVerified())
+                .location(user.getLocation())
+                .referrerUsername(user.getReferrerUsername())
                 .enabled(user.isEnabled())
                 .build();
     }

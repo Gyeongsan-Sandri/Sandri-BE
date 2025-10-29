@@ -5,9 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import sandri.sandriweb.domain.user.entity.User;
-
-import java.time.LocalDate;
 
 @Getter
 @Builder
@@ -23,3 +20,5 @@ public class LoginRequestDto {
     @Size(min = 8, max = 20, message = "비밀번호는 8-20자 사이여야 합니다")
     private String password;
 }
+
+
