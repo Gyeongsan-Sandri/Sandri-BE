@@ -30,9 +30,28 @@ public class UserController {
     })
     public ResponseEntity<ApiResponseDto<UserResponseDto>> getUserProfile(Authentication authentication) {
         
-        String username = authentication.getName();
-        log.info("사용자 프로필 조회: {}", username);
-        ApiResponseDto<UserResponseDto> response = userService.getUserProfile(username);
+        String nickname = authentication.getName();
+        log.info("사용자 프로필 조회: {}", nickname);
+        ApiResponseDto<UserResponseDto> response = userService.getUserProfile(nickname);
+        
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+    
+    @GetMapping("/profile/{nickname}")
+    @Operation(summary = "닉네임으로 프로필 조회", description = "닉네임으로 사용자 프로필 정보를 조회합니다")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자 없음")
+    })
+    public ResponseEntity<ApiResponseDto<UserResponseDto>> getUserProfileByNickname(
+            @PathVariable String nickname) {
+        
+        log.info("사용자 프로필 조회 (닉네임): {}", nickname);
+        ApiResponseDto<UserResponseDto> response = userService.getUserProfile(nickname);
         
         if (response.isSuccess()) {
             return ResponseEntity.ok(response);
