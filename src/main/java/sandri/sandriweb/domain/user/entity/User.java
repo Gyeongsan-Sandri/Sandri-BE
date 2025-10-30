@@ -8,21 +8,22 @@ import lombok.NoArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import sandri.sandriweb.global.entity.BaseEntity;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
 @Entity
-@Table(name = "users")
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class User implements UserDetails {
+@Table(name = "users")
+public class User extends BaseEntity implements UserDetails {
     
     @Id
+    @Column(name = "user_id")
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
@@ -54,27 +55,7 @@ public class User implements UserDetails {
     
     @Column(nullable = false)
     private boolean phoneVerified;
-    
-    @Column(nullable = false)
-    private boolean enabled;
-    
-    @Column(nullable = false)
-    private LocalDateTime createdAt;
-    
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
-    
-    @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-    }
-    
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
-    
+
     // UserDetails 구현
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -106,21 +87,12 @@ public class User implements UserDetails {
         return true;
     }
     
-    @Override
-    public boolean isEnabled() {
-        return enabled;
-    }
-    
     public void updatePassword(String password) {
         this.password = password;
     }
     
     public void verifyPhone() {
         this.phoneVerified = true;
-    }
-    
-    public void enable() {
-        this.enabled = true;
     }
     
     public enum Gender {

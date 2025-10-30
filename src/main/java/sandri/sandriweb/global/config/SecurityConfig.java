@@ -1,4 +1,4 @@
-package sandri.sandriweb.config;
+package sandri.sandriweb.global.config;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
