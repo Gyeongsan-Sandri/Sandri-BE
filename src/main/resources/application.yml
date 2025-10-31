@@ -8,9 +8,9 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/sandri?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-    username: localmaster
-    password: qwer1234
+    url: jdbc:mysql://${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: ${DATABASE_USER}
+    password: ${DATABASE_PASS}
 
 springdoc:
   api-docs:
