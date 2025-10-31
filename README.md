@@ -4,6 +4,33 @@
 
 경산 관광 웹/앱 서비스입니다.
 
+## 🚀 API 문서
+
+### Swagger UI
+- 개발 서버: http://localhost:8080/swagger-ui.html
+- API 문서: http://localhost:8080/v3/api-docs
+
+### 주요 API 엔드포인트
+
+#### 인증 관련 API (`/api/auth`)
+- `POST /api/auth/register` - 회원가입(단일 단계)
+- `POST /api/auth/login` - 로그인
+
+#### 사용자 관련 API (`/api/user`)
+- `GET /api/user/profile` - 사용자 프로필 조회
+
+### 환경 변수 설정
+```bash
+DB_URL=jdbc:mysql://localhost:3306/sandri
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
+```
+
+### 세션 기반 인증
+- 로그인 시 세션에 사용자 정보 저장
+- 브라우저 쿠키를 통한 세션 관리
+- 로그아웃 시 세션 무효화
+
 ### 🕰️ 개발 기간
 
 - 2025.9.3.수 ~
