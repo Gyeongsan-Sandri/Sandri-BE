@@ -144,7 +144,7 @@ public class UserService {
                     .username(request.getUsername())
                     .password(passwordEncoder.encode(request.getPassword()))
                     .phoneVerified(true) // 휴대폰 인증이 완료되었다고 가정
-                    //.enabled(true)
+                    .enabled(true)
                     .build();
             
             User savedUser = userRepository.save(user);

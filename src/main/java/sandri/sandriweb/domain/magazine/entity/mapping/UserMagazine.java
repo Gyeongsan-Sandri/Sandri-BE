@@ -2,12 +2,13 @@ package sandri.sandriweb.domain.magazine.entity.mapping;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 import sandri.sandriweb.domain.magazine.entity.Magazine;
 import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.global.entity.BaseEntity;
 
 @Entity
-@Builder
+@SuperBuilder
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)

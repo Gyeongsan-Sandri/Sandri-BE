@@ -40,4 +40,22 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
                                            @Param("excludeId") Long excludeId,
                                            @Param("categoryName") String categoryName,
                                            @Param("limit") int limit);
+
+    /**
+     * 카테고리별 장소 조회 (좋아요 많은 순)
+     * @param categoryName 카테고리 이름 (자연_힐링, 역사_전통, 문화_체험, 식도락)
+     * @param limit 조회할 개수
+     * @return 좋아요 많은 순으로 정렬된 장소 리스트
+     */
+    @Query(value = "SELECT p.* FROM places p " +
+           "LEFT JOIN (SELECT place_id, COUNT(*) as like_count " +
+           "           FROM place_likes " +
+           "           WHERE enabled = true " +
+           "           GROUP BY place_id) AS likes ON p.place_id = likes.place_id " +
+           "WHERE p.category = :categoryName " +
+           "AND p.enabled = true " +
+           "ORDER BY COALESCE(likes.like_count, 0) DESC, p.created_at DESC " +
+           "LIMIT :limit", nativeQuery = true)
+    List<Place> findByCategoryOrderByLikeCountDesc(@Param("categoryName") String categoryName,
+                                                    @Param("limit") int limit);
 }

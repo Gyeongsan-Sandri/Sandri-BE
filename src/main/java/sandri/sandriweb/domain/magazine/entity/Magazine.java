@@ -2,12 +2,13 @@ package sandri.sandriweb.domain.magazine.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 import sandri.sandriweb.global.entity.BaseEntity;
 
 import java.util.List;
 
 @Entity
-@Builder
+@SuperBuilder
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -22,6 +23,10 @@ public class Magazine extends BaseEntity {
     @Column(name = "name", nullable = false)
     private String name;
 
+
+    @Column(name = "summary")
+    private String summary;
+    
     @Column(name = "content")
     private String content;
 

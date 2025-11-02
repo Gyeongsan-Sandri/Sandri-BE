@@ -2,10 +2,11 @@ package sandri.sandriweb.domain.magazine.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 import sandri.sandriweb.global.entity.BaseEntity;
 
 @Entity
-@Builder
+@SuperBuilder
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -19,7 +20,7 @@ public class MagazineCard extends BaseEntity {
 
     @Column(name = "card_url", nullable = false)
     private String cardUrl;
-
+    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "magazine_id")
     private Magazine magazine;

@@ -1,0 +1,199 @@
+package sandri.sandriweb.domain.place.controller;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+import sandri.sandriweb.domain.place.dto.CategoryPlaceDto;
+import sandri.sandriweb.domain.place.dto.NearbyPlaceDto;
+import sandri.sandriweb.domain.place.dto.PlaceDetailResponseDto;
+import sandri.sandriweb.domain.place.enums.PlaceCategory;
+import sandri.sandriweb.domain.place.service.PlaceService;
+import sandri.sandriweb.domain.user.dto.ApiResponseDto;
+import sandri.sandriweb.domain.user.entity.User;
+import sandri.sandriweb.domain.user.repository.UserRepository;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/places")
+@RequiredArgsConstructor
+@Slf4j
+@Tag(name = "관광지", description = "관광지 정보 관련 API")
+public class PlaceController {
+
+    private final PlaceService placeService;
+    private final UserRepository userRepository;
+
+    @GetMapping("/{placeId}")
+    @Operation(summary = "관광지 상세 정보 조회", 
+               description = "관광지의 상세 정보를 조회합니다. 이름, 주소, 평점, 카테고리, 사진, 리뷰, 근처 가볼만한 곳을 반환합니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "관광지 없음")
+    })
+    public ResponseEntity<ApiResponseDto<PlaceDetailResponseDto>> getPlaceDetail(
+            @Parameter(description = "관광지 ID", example = "1")
+            @PathVariable Long placeId,
+            @Parameter(description = "조회할 리뷰 개수", example = "3")
+            @RequestParam(defaultValue = "3") int reviewCount,
+            @Parameter(description = "조회할 리뷰 사진 개수", example = "3")
+            @RequestParam(defaultValue = "3") int reviewPhotoCount,
+            @Parameter(description = "리뷰 정렬 기준 (latest: 최신순, rating_high: 평점 높은 순, rating_low: 평점 낮은 순)", example = "latest")
+            @RequestParam(defaultValue = "latest") String reviewSort) {
+
+        log.info("관광지 상세 정보 조회: placeId={}, reviewCount={}, reviewPhotoCount={}, reviewSort={}", 
+                 placeId, reviewCount, reviewPhotoCount, reviewSort);
+
+        try {
+            // 정렬 옵션 검증
+            if (!isValidReviewSort(reviewSort)) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponseDto.error("정렬 기준은 'latest', 'rating_high', 'rating_low' 중 하나여야 합니다."));
+            }
+            
+            PlaceDetailResponseDto response = placeService.getPlaceDetail(placeId, reviewCount, reviewPhotoCount, reviewSort);
+            return ResponseEntity.ok(ApiResponseDto.success(response));
+        } catch (RuntimeException e) {
+            log.error("관광지 상세 정보 조회 실패: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            log.error("관광지 상세 정보 조회 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("관광지 정보를 조회하는 중 오류가 발생했습니다."));
+        }
+    }
+
+    @GetMapping("/{placeId}/nearby")
+    @Operation(summary = "근처 가볼만한 곳 조회", 
+               description = "특정 관광지 근처의 카테고리별 추천 장소 목록을 조회합니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "관광지 없음")
+    })
+    public ResponseEntity<ApiResponseDto<List<NearbyPlaceDto>>> getNearbyPlaces(
+            @Parameter(description = "관광지 ID", example = "1")
+            @PathVariable Long placeId,
+            @Parameter(description = "카테고리 (관광지/맛집/카페)", example = "맛집")
+            @RequestParam String category,
+            @Parameter(description = "조회할 개수", example = "3")
+            @RequestParam(defaultValue = "3") int count) {
+
+        log.info("근처 장소 조회: placeId={}, category={}, count={}", placeId, category, count);
+
+        try {
+            // 카테고리 검증
+            if (!isValidCategory(category)) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponseDto.error("카테고리는 '관광지', '맛집', '카페' 중 하나여야 합니다."));
+            }
+
+            List<NearbyPlaceDto> response = placeService.getNearbyPlacesByPlaceId(placeId, category, count);
+            return ResponseEntity.ok(ApiResponseDto.success(response));
+        } catch (RuntimeException e) {
+            log.error("근처 장소 조회 실패: {}", e.getMessage());
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            log.error("근처 장소 조회 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("근처 장소를 조회하는 중 오류가 발생했습니다."));
+        }
+    }
+
+    private boolean isValidCategory(String category) {
+        if (category == null) {
+            return false;
+        }
+        try {
+            PlaceCategory.valueOf(category);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    @GetMapping("/category")
+    @Operation(summary = "카테고리별 장소 조회",
+               description = "카테고리별로 좋아요가 많은 순으로 장소 목록을 조회합니다. 로그인한 경우 사용자가 좋아요한 장소 여부도 함께 반환됩니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    public ResponseEntity<ApiResponseDto<List<CategoryPlaceDto>>> getPlacesByCategory(
+            @Parameter(description = "카테고리 ('자연/힐링', '역사/전통', '문화/체험', '식도락' 중 하나)", example = "자연/힐링")
+            @RequestParam String category,
+            @Parameter(description = "조회할 개수", example = "10")
+            @RequestParam(defaultValue = "10") int count,
+            Authentication authentication) {
+
+        log.info("카테고리별 장소 조회: category={}, count={}", category, count);
+
+        try {
+            // 카테고리 검증
+            if (!isValidCategoryDisplayName(category)) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponseDto.error("카테고리는 '자연/힐링', '역사/전통', '문화/체험', '식도락' 중 하나여야 합니다."));
+            }
+
+            // 사용자 ID 조회 (로그인한 경우)
+            Long userId = null;
+            if (authentication != null && authentication.isAuthenticated()) {
+                try {
+                    User user = userRepository.findByUsername(authentication.getName())
+                            .orElse(null);
+                    if (user != null) {
+                        userId = user.getId();
+                    }
+                } catch (Exception e) {
+                    log.debug("사용자 정보 조회 실패 (무시): {}", e.getMessage());
+                }
+            }
+
+            List<CategoryPlaceDto> response = placeService.getPlacesByCategory(category, count, userId);
+            return ResponseEntity.ok(ApiResponseDto.success(response));
+        } catch (RuntimeException e) {
+            log.error("카테고리별 장소 조회 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("카테고리별 장소 조회 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("카테고리별 장소를 조회하는 중 오류가 발생했습니다."));
+        }
+    }
+
+    private boolean isValidCategory(String category) {
+        if (category == null) {
+            return false;
+        }
+        try {
+            PlaceCategory.valueOf(category);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private boolean isValidCategoryDisplayName(String categoryDisplayName) {
+        if (categoryDisplayName == null) {
+            return false;
+        }
+        return categoryDisplayName.equals("자연/힐링") ||
+               categoryDisplayName.equals("역사/전통") ||
+               categoryDisplayName.equals("문화/체험") ||
+               categoryDisplayName.equals("식도락");
+    }
+
+    private boolean isValidReviewSort(String sort) {
+        return sort != null &&
+               (sort.equals("latest") || sort.equals("rating_high") || sort.equals("rating_low"));
+    }
+}
+
