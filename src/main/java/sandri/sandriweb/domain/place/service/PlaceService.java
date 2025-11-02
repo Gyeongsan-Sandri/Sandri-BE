@@ -11,10 +11,13 @@ import sandri.sandriweb.domain.place.dto.*;
 import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.entity.PlacePhoto;
 import sandri.sandriweb.domain.place.enums.Category;
+import sandri.sandriweb.domain.place.entity.mapping.UserPlace;
 import sandri.sandriweb.domain.place.repository.PlacePhotoRepository;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 import sandri.sandriweb.domain.place.repository.UserPlaceRepository;
 import sandri.sandriweb.domain.review.service.ReviewService;
+import sandri.sandriweb.domain.user.entity.User;
+import sandri.sandriweb.domain.user.repository.UserRepository;
 
 import java.util.List;
 import java.util.Map;
@@ -30,6 +33,7 @@ public class PlaceService {
     private final PlacePhotoRepository placePhotoRepository;
     private final ReviewService reviewService;
     private final UserPlaceRepository userPlaceRepository;
+    private final UserRepository userRepository;
     
     private static final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
@@ -120,21 +124,23 @@ public class PlaceService {
                 .map(java.util.Optional::get)
                 .collect(Collectors.toList());
         
-        // 사진 효율적으로 로딩
-        List<PlacePhoto> allNearbyPhotos = placePhotoRepository.findByPlaceIdIn(nearbyPlaceIds);
+        // 사진 효율적으로 로딩 (각 장소당 첫 번째 사진만)
+        List<PlacePhoto> firstPhotos = placePhotoRepository.findFirstPhotoByPlaceIdIn(nearbyPlaceIds);
         
-        // Place ID별로 사진 그룹화
-        java.util.Map<Long, List<PlacePhoto>> photosByPlaceId = allNearbyPhotos.stream()
-                .collect(Collectors.groupingBy(photo -> photo.getPlace().getId()));
+        // Place ID별로 사진 매핑 (각 장소당 한 장씩)
+        java.util.Map<Long, String> photoUrlByPlaceId = firstPhotos.stream()
+                .collect(Collectors.toMap(
+                        photo -> photo.getPlace().getId(),
+                        PlacePhoto::getPhotoUrl
+                ));
         
         // 기준 장소의 위치
         Point centerLocation = place.getLocation();
         
         return placesWithCategory.stream()
                 .map(nearbyPlace -> {
-                    // 사진 URL 추출
-                    List<PlacePhoto> photos = photosByPlaceId.getOrDefault(nearbyPlace.getId(), List.of());
-                    String thumbnailUrl = photos.isEmpty() ? null : photos.get(0).getPhotoUrl();
+                    // 사진 URL 추출 (각 장소당 한 장씩)
+                    String thumbnailUrl = photoUrlByPlaceId.get(nearbyPlace.getId());
                     
                     // 거리 계산 (미터 단위)
                     Long distance = calculateDistanceInMeters(centerLocation, nearbyPlace.getLocation());
@@ -224,10 +230,13 @@ public class PlaceService {
                 .map(Place::getId)
                 .collect(Collectors.toList());
 
-        // 사진 효율적으로 로딩
-        List<PlacePhoto> allPhotos = placePhotoRepository.findByPlaceIdIn(placeIds);
-        Map<Long, List<PlacePhoto>> photosByPlaceId = allPhotos.stream()
-                .collect(Collectors.groupingBy(photo -> photo.getPlace().getId()));
+        // 사진 효율적으로 로딩 (각 장소당 첫 번째 사진만)
+        List<PlacePhoto> firstPhotos = placePhotoRepository.findFirstPhotoByPlaceIdIn(placeIds);
+        Map<Long, String> photoUrlByPlaceId = firstPhotos.stream()
+                .collect(Collectors.toMap(
+                        photo -> photo.getPlace().getId(),
+                        PlacePhoto::getPhotoUrl
+                ));
 
         // 좋아요 수 계산 (효율적으로)
         Map<Long, Long> likeCountByPlaceId = userPlaceRepository.countLikesByPlaceIds(placeIds).stream()
@@ -257,9 +266,8 @@ public class PlaceService {
         // DTO 변환
         return places.stream()
                 .map(place -> {
-                    // 사진 URL 추출
-                    List<PlacePhoto> photos = photosByPlaceId.getOrDefault(place.getId(), List.of());
-                    String thumbnailUrl = photos.isEmpty() ? null : photos.get(0).getPhotoUrl();
+                    // 사진 URL 추출 (각 장소당 한 장씩)
+                    String thumbnailUrl = photoUrlByPlaceId.get(place.getId());
 
                     // 좋아요 수
                     Integer likeCount = likeCountByPlaceId.getOrDefault(place.getId(), 0L).intValue();
@@ -283,6 +291,47 @@ public class PlaceService {
                             .build();
                 })
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 장소 좋아요 토글
+     * @param placeId 장소 ID
+     * @param userId 사용자 ID
+     * @return 좋아요 상태 (true: 좋아요 활성화, false: 좋아요 비활성화)
+     */
+    @Transactional
+    public boolean toggleLike(Long placeId, Long userId) {
+        // 장소 존재 확인
+        Place place = placeRepository.findById(placeId)
+                .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
+        
+        // 사용자 존재 확인
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+        
+        // 기존 좋아요 조회
+        return userPlaceRepository.findByUserIdAndPlaceId(userId, placeId)
+                .map(userPlace -> {
+                    // 이미 좋아요가 있는 경우: 토글
+                    if (userPlace.isEnabled()) {
+                        userPlace.disable(); // 좋아요 취소
+                        userPlaceRepository.save(userPlace);
+                        return false;
+                    } else {
+                        userPlace.enable(); // 좋아요 재활성화
+                        userPlaceRepository.save(userPlace);
+                        return true;
+                    }
+                })
+                .orElseGet(() -> {
+                    // 좋아요가 없는 경우: 새로 생성
+                    UserPlace newUserPlace = UserPlace.builder()
+                            .user(user)
+                            .place(place)
+                            .build();
+                    userPlaceRepository.save(newUserPlace);
+                    return true;
+                });
     }
 
     /**

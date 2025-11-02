@@ -92,5 +92,49 @@ public class MagazineController {
                     .body(ApiResponseDto.error("매거진 목록을 조회하는 중 오류가 발생했습니다."));
         }
     }
+
+    @PostMapping("/{magazineId}/like")
+    @Operation(summary = "매거진 좋아요 토글",
+               description = "매거진에 좋아요를 추가하거나 취소합니다. 이미 좋아요한 경우 취소되고, 좋아요하지 않은 경우 추가됩니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "좋아요 토글 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "매거진 없음")
+    })
+    public ResponseEntity<ApiResponseDto<Boolean>> toggleLike(
+            @Parameter(description = "매거진 ID", example = "1")
+            @PathVariable Long magazineId,
+            Authentication authentication) {
+
+        log.info("매거진 좋아요 토글: magazineId={}", magazineId);
+
+        try {
+            // 인증 확인
+            if (authentication == null || !authentication.isAuthenticated()) {
+                return ResponseEntity.status(401)
+                        .body(ApiResponseDto.error("로그인이 필요합니다."));
+            }
+
+            // 사용자 ID 조회
+            User user = userRepository.findByUsername(authentication.getName())
+                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+
+            // 좋아요 토글
+            boolean isLiked = magazineService.toggleLike(magazineId, user.getId());
+            
+            String message = isLiked ? "좋아요가 추가되었습니다." : "좋아요가 취소되었습니다.";
+            return ResponseEntity.ok(ApiResponseDto.success(message, isLiked));
+
+        } catch (RuntimeException e) {
+            log.error("매거진 좋아요 토글 실패: {}", e.getMessage());
+            return ResponseEntity.status(404)
+                    .body(ApiResponseDto.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("매거진 좋아요 토글 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("좋아요 처리 중 오류가 발생했습니다."));
+        }
+    }
 }
 

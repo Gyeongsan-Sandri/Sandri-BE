@@ -86,11 +86,6 @@ public class User extends BaseEntity implements UserDetails {
         return true;
     }
     
-    @Override
-    public boolean isEnabled() {
-        return enabled;
-    }
-    
     public void updatePassword(String password) {
         this.password = password;
     }

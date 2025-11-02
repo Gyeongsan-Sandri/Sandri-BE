@@ -11,8 +11,12 @@ import sandri.sandriweb.domain.magazine.dto.MagazineDetailResponseDto;
 import sandri.sandriweb.domain.magazine.dto.MagazineListDto;
 import sandri.sandriweb.domain.magazine.entity.Magazine;
 import sandri.sandriweb.domain.magazine.entity.MagazineCard;
+import sandri.sandriweb.domain.magazine.entity.mapping.UserMagazine;
 import sandri.sandriweb.domain.magazine.repository.MagazineRepository;
 import sandri.sandriweb.domain.magazine.repository.UserMagazineRepository;
+import sandri.sandriweb.domain.user.entity.User;
+import sandri.sandriweb.domain.user.repository.UserRepository;
+import sandri.sandriweb.global.entity.BaseEntity;
 
 import java.util.HashMap;
 import java.util.List;
@@ -27,6 +31,7 @@ public class MagazineService {
 
     private final MagazineRepository magazineRepository;
     private final UserMagazineRepository userMagazineRepository;
+    private final UserRepository userRepository;
 
     /**
      * 매거진 상세 조회 (카드뉴스 포함)
@@ -41,7 +46,7 @@ public class MagazineService {
 
         // MagazineCard를 DTO로 변환 (enabled된 카드만)
         List<MagazineCardDto> cardDtos = magazine.getCards().stream()
-                .filter(card -> card.isEnabled()) // enabled된 카드만 필터링
+                .filter(BaseEntity::isEnabled) // enabled된 카드만 필터링
                 .map(this::convertToCardDto)
                 .collect(Collectors.toList());
 
@@ -74,13 +79,13 @@ public class MagazineService {
 
         // 매거진과 첫 번째 카드를 함께 조회
         List<Magazine> magazinesWithCards = magazineIds.stream()
-                .map(id -> magazineRepository.findByIdWithCards(id))
+                .map(magazineRepository::findByIdWithCards)
                 .filter(java.util.Optional::isPresent)
                 .map(java.util.Optional::get)
-                .collect(Collectors.toList());
+                .toList();
 
         // 사용자가 좋아요한 매거진 ID 조회 (로그인한 경우)
-        Map<Long, Boolean> likedMagazineIds = new HashMap<>();
+        Map<Long, Boolean> likedMagazineIds;
         if (userId != null) {
             List<Long> likedIds = userMagazineRepository.findLikedMagazineIdsByUserId(userId, magazineIds);
             likedMagazineIds = likedIds.stream()
@@ -88,6 +93,8 @@ public class MagazineService {
                             magazineId -> magazineId,
                             magazineId -> true
                     ));
+        } else {
+            likedMagazineIds = new HashMap<>();
         }
 
         // DTO 변환
@@ -95,9 +102,7 @@ public class MagazineService {
                 .map(magazine -> {
                     // 첫 번째 enabled된 카드 찾기
                     MagazineCard firstCard = magazine.getCards().stream()
-                            .filter(MagazineCard::isEnabled)
-                            .sorted((c1, c2) -> c1.getCreatedAt().compareTo(c2.getCreatedAt()))
-                            .findFirst()
+                            .filter(MagazineCard::isEnabled).min((c1, c2) -> c1.getCreatedAt().compareTo(c2.getCreatedAt()))
                             .orElse(null);
 
                     String thumbnail = firstCard != null ? firstCard.getCardUrl() : null;
@@ -114,6 +119,47 @@ public class MagazineService {
                             .build();
                 })
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 매거진 좋아요 토글
+     * @param magazineId 매거진 ID
+     * @param userId 사용자 ID
+     * @return 좋아요 상태 (true: 좋아요 활성화, false: 좋아요 비활성화)
+     */
+    @Transactional
+    public boolean toggleLike(Long magazineId, Long userId) {
+        // 매거진 존재 확인
+        Magazine magazine = magazineRepository.findById(magazineId)
+                .orElseThrow(() -> new RuntimeException("매거진을 찾을 수 없습니다."));
+        
+        // 사용자 존재 확인
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+        
+        // 기존 좋아요 조회
+        return userMagazineRepository.findByUserIdAndMagazineId(userId, magazineId)
+                .map(userMagazine -> {
+                    // 이미 좋아요가 있는 경우: 토글
+                    if (userMagazine.isEnabled()) {
+                        userMagazine.disable(); // 좋아요 취소
+                        userMagazineRepository.save(userMagazine);
+                        return false;
+                    } else {
+                        userMagazine.enable(); // 좋아요 재활성화
+                        userMagazineRepository.save(userMagazine);
+                        return true;
+                    }
+                })
+                .orElseGet(() -> {
+                    // 좋아요가 없는 경우: 새로 생성
+                    UserMagazine newUserMagazine = UserMagazine.builder()
+                            .user(user)
+                            .magazine(magazine)
+                            .build();
+                    userMagazineRepository.save(newUserMagazine);
+                    return true;
+                });
     }
 
     /**
