@@ -11,6 +11,7 @@ import sandri.sandriweb.domain.place.dto.*;
 import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.entity.PlacePhoto;
 import sandri.sandriweb.domain.place.enums.Category;
+import sandri.sandriweb.domain.place.enums.PlaceCategory;
 import sandri.sandriweb.domain.place.entity.mapping.UserPlace;
 import sandri.sandriweb.domain.place.repository.PlacePhotoRepository;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
@@ -38,14 +39,11 @@ public class PlaceService {
     private static final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
     /**
-     * 관광지 상세 정보 조회
+     * 관광지 상세 정보 조회 (기본 정보만, 리뷰 제외)
      * @param placeId 관광지 ID
-     * @param reviewCount 조회할 리뷰 개수
-     * @param reviewPhotoCount 조회할 리뷰 사진 개수
-     * @param reviewSort 리뷰 정렬 기준 (latest: 최신순, rating_high: 평점 높은 순, rating_low: 평점 낮은 순)
-     * @return PlaceDetailResponseDto
+     * @return PlaceDetailResponseDto (리뷰 정보 제외)
      */
-    public PlaceDetailResponseDto getPlaceDetail(Long placeId, int reviewCount, int reviewPhotoCount, String reviewSort) {
+    public PlaceDetailResponseDto getPlaceDetail(Long placeId) {
         // 1. 관광지 기본 정보 조회
         Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new RuntimeException("관광지를 찾을 수 없습니다."));
@@ -58,16 +56,10 @@ public class PlaceService {
         // 3. 평점 계산
         Double averageRating = reviewService.getAverageRating(placeId);
 
-        // 4. 리뷰 조회 (요청 개수만큼)
-        List<ReviewDto> reviewDtos = reviewService.getReviewsByPlaceId(placeId, reviewCount, reviewSort);
-
-        // 5. 리뷰 사진 조회 (요청 개수만큼)
-        List<String> reviewPhotoUrls = reviewService.getReviewPhotos(placeId, reviewPhotoCount);
-
-        // 6. 근처 가볼만한 곳 조회 (기본: 관광지 3곳)
+        // 4. 근처 가볼만한 곳 조회 (기본: 관광지 3곳)
         List<NearbyPlaceDto> nearbyPlaces = getNearbyPlaces(place, "관광지", 3);
 
-        // 7. DTO 생성 및 반환
+        // 5. DTO 생성 및 반환 (리뷰 정보 제외)
         return PlaceDetailResponseDto.builder()
                 .placeId(place.getId())
                 .name(place.getName())
@@ -82,8 +74,8 @@ public class PlaceService {
                 .summary(place.getSummery())
                 .information(place.getInformation())
                 .officialPhotos(officialPhotos)
-                .reviewPhotos(reviewPhotoUrls)
-                .reviews(reviewDtos)
+                .reviewPhotos(null) // 리뷰 사진은 별도 API로 조회
+                .reviews(null) // 리뷰 목록은 별도 API로 조회
                 .nearbyPlaces(nearbyPlaces)
                 .build();
     }
@@ -246,7 +238,7 @@ public class PlaceService {
                 ));
 
         // 사용자가 좋아요한 장소 ID 조회 (로그인한 경우)
-        Map<Long, Boolean> likedPlaceIds = new java.util.HashMap<>();
+        Map<Long, Boolean> likedPlaceIds;
         if (userId != null) {
             List<Long> likedIds = userPlaceRepository.findLikedPlaceIdsByUserId(userId, placeIds);
             likedPlaceIds = likedIds.stream()
@@ -254,6 +246,8 @@ public class PlaceService {
                             placeId -> placeId,
                             placeId -> true
                     ));
+        } else {
+            likedPlaceIds = new java.util.HashMap<>();
         }
 
         // 평점 계산
@@ -332,6 +326,60 @@ public class PlaceService {
                     userPlaceRepository.save(newUserPlace);
                     return true;
                 });
+    }
+
+    /**
+     * 장소 생성 (관리자용)
+     * @param request 장소 생성 요청 DTO
+     * @return 생성된 장소 ID
+     */
+    @Transactional
+    public Long createPlace(CreatePlaceRequestDto request) {
+        // 위도/경도를 Point로 변환
+        Point location = geometryFactory.createPoint(
+                new org.locationtech.jts.geom.Coordinate(request.getLongitude(), request.getLatitude())
+        );
+
+        // Place 생성
+        Place place = Place.builder()
+                .name(request.getName())
+                .address(request.getAddress())
+                .location(location)
+                .phone(request.getPhone())
+                .webpage(request.getWebpage())
+                .summery(request.getSummary())
+                .information(request.getInformation())
+                .group(request.getGroup())
+                .category(request.getCategory())
+                .build();
+
+        Place savedPlace = placeRepository.save(place);
+        log.info("장소 생성 완료: placeId={}, name={}", savedPlace.getId(), savedPlace.getName());
+
+        return savedPlace.getId();
+    }
+
+    /**
+     * 장소 사진 추가 (관리자용)
+     * @param request 장소 사진 생성 요청 DTO
+     * @return 생성된 사진 ID
+     */
+    @Transactional
+    public Long createPlacePhoto(CreatePlacePhotoRequestDto request) {
+        // 장소 조회
+        Place place = placeRepository.findById(request.getPlaceId())
+                .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
+
+        // PlacePhoto 생성
+        PlacePhoto photo = PlacePhoto.builder()
+                .place(place)
+                .photoUrl(request.getPhotoUrl())
+                .build();
+
+        PlacePhoto savedPhoto = placePhotoRepository.save(photo);
+        log.info("장소 사진 추가 완료: photoId={}, placeId={}", savedPhoto.getId(), request.getPlaceId());
+
+        return savedPhoto.getId();
     }
 
     /**

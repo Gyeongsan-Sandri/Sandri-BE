@@ -6,18 +6,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import sandri.sandriweb.domain.magazine.dto.CreateMagazineRequestDto;
 import sandri.sandriweb.domain.magazine.dto.MagazineCardDto;
 import sandri.sandriweb.domain.magazine.dto.MagazineDetailResponseDto;
 import sandri.sandriweb.domain.magazine.dto.MagazineListDto;
+import sandri.sandriweb.domain.magazine.dto.UpdateMagazineRequestDto;
 import sandri.sandriweb.domain.magazine.entity.Magazine;
 import sandri.sandriweb.domain.magazine.entity.MagazineCard;
 import sandri.sandriweb.domain.magazine.entity.mapping.UserMagazine;
+import sandri.sandriweb.domain.magazine.repository.MagazineCardRepository;
 import sandri.sandriweb.domain.magazine.repository.MagazineRepository;
 import sandri.sandriweb.domain.magazine.repository.UserMagazineRepository;
 import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.global.entity.BaseEntity;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +34,7 @@ import java.util.stream.Collectors;
 public class MagazineService {
 
     private final MagazineRepository magazineRepository;
+    private final MagazineCardRepository magazineCardRepository;
     private final UserMagazineRepository userMagazineRepository;
     private final UserRepository userRepository;
 
@@ -40,15 +45,28 @@ public class MagazineService {
      */
     @Transactional(readOnly = true)
     public MagazineDetailResponseDto getMagazineDetail(Long magazineId) {
-        // Magazine과 MagazineCard를 함께 조회 (FETCH JOIN)
+        // 1. 매거진과 카드를 함께 조회 (FETCH JOIN)
         Magazine magazine = magazineRepository.findByIdWithCards(magazineId)
                 .orElseThrow(() -> new RuntimeException("매거진을 찾을 수 없습니다."));
 
-        // MagazineCard를 DTO로 변환 (enabled된 카드만)
-        List<MagazineCardDto> cardDtos = magazine.getCards().stream()
-                .filter(BaseEntity::isEnabled) // enabled된 카드만 필터링
-                .map(this::convertToCardDto)
-                .collect(Collectors.toList());
+        // 2. MagazineCard를 DTO로 변환 (enabled된 카드만, createdAt 순으로 정렬)
+        List<MagazineCardDto> cardDtos = new ArrayList<>();
+        if (magazine.getCards() != null && !magazine.getCards().isEmpty()) {
+            cardDtos = magazine.getCards().stream()
+                    .filter(BaseEntity::isEnabled) // enabled된 카드만 필터링
+                    .sorted((c1, c2) -> {
+                        if (c1.getCreatedAt() == null && c2.getCreatedAt() == null) return 0;
+                        if (c1.getCreatedAt() == null) return 1;
+                        if (c2.getCreatedAt() == null) return -1;
+                        return c1.getCreatedAt().compareTo(c2.getCreatedAt()); // 오름차순 정렬
+                    })
+                    .map(this::convertToCardDto)
+                    .collect(Collectors.toList());
+        }
+
+        log.info("매거진 상세 조회: magazineId={}, cardCount={}, totalCardsFetched={}", 
+                 magazineId, cardDtos.size(), 
+                 magazine.getCards() != null ? magazine.getCards().size() : 0);
 
         // DTO 생성 및 반환
         return MagazineDetailResponseDto.builder()
@@ -160,6 +178,96 @@ public class MagazineService {
                     userMagazineRepository.save(newUserMagazine);
                     return true;
                 });
+    }
+
+    /**
+     * 매거진 생성 (관리자용)
+     * @param request 매거진 생성 요청 DTO
+     * @return 생성된 매거진 ID
+     */
+    @Transactional
+    public Long createMagazine(CreateMagazineRequestDto request) {
+        // 1. 매거진 생성
+        Magazine magazine = Magazine.builder()
+                .name(request.getName())
+                .summary(request.getSummary())
+                .content(request.getContent())
+                .build();
+
+        Magazine savedMagazine = magazineRepository.save(magazine);
+
+        // 2. 매거진 카드 생성 (순서대로)
+        if (request.getCardUrls() != null && !request.getCardUrls().isEmpty()) {
+            log.info("매거진 카드 생성 시작: magazineId={}, cardUrlsCount={}", 
+                     savedMagazine.getId(), request.getCardUrls().size());
+            
+            List<MagazineCard> cards = request.getCardUrls().stream()
+                    .map(cardUrl -> MagazineCard.builder()
+                            .magazine(savedMagazine)
+                            .cardUrl(cardUrl)
+                            .build())
+                    .collect(Collectors.toList());
+
+            List<MagazineCard> savedCards = magazineCardRepository.saveAll(cards);
+            log.info("매거진 카드 {}개 추가 완료: magazineId={}, savedCardsCount={}", 
+                     cards.size(), savedMagazine.getId(), savedCards.size());
+            
+            // 저장 직후 확인
+            List<MagazineCard> verifyCards = magazineCardRepository.findByMagazineId(savedMagazine.getId());
+            log.info("매거진 카드 저장 확인: magazineId={}, verifiedCount={}", 
+                     savedMagazine.getId(), verifyCards.size());
+        } else {
+            log.info("매거진 카드 없음: magazineId={}", savedMagazine.getId());
+        }
+
+        log.info("매거진 생성 완료: magazineId={}, name={}, cardCount={}", 
+                 savedMagazine.getId(), savedMagazine.getName(), 
+                 request.getCardUrls() != null ? request.getCardUrls().size() : 0);
+
+        return savedMagazine.getId();
+    }
+
+    /**
+     * 매거진 수정 (관리자용)
+     * @param magazineId 매거진 ID
+     * @param request 매거진 수정 요청 DTO
+     * @return 수정된 매거진 ID
+     */
+    @Transactional
+    public Long updateMagazine(Long magazineId, UpdateMagazineRequestDto request) {
+        // 매거진 조회
+        Magazine magazine = magazineRepository.findById(magazineId)
+                .orElseThrow(() -> new RuntimeException("매거진을 찾을 수 없습니다."));
+
+        // 1. 매거진 정보 수정
+        magazine.update(request.getName(), request.getSummary(), request.getContent());
+        Magazine updatedMagazine = magazineRepository.save(magazine);
+
+        // 2. 기존 카드 삭제
+        List<MagazineCard> existingCards = magazineCardRepository.findByMagazineId(magazineId);
+        if (!existingCards.isEmpty()) {
+            magazineCardRepository.deleteAll(existingCards);
+            log.info("기존 매거진 카드 {}개 삭제 완료: magazineId={}", existingCards.size(), magazineId);
+        }
+
+        // 3. 새로운 카드 생성 (순서대로)
+        if (request.getCardUrls() != null && !request.getCardUrls().isEmpty()) {
+            List<MagazineCard> newCards = request.getCardUrls().stream()
+                    .map(cardUrl -> MagazineCard.builder()
+                            .magazine(updatedMagazine)
+                            .cardUrl(cardUrl)
+                            .build())
+                    .collect(Collectors.toList());
+
+            magazineCardRepository.saveAll(newCards);
+            log.info("매거진 카드 {}개 추가 완료: magazineId={}", newCards.size(), magazineId);
+        }
+
+        log.info("매거진 수정 완료: magazineId={}, name={}, cardCount={}", 
+                 updatedMagazine.getId(), updatedMagazine.getName(), 
+                 request.getCardUrls() != null ? request.getCardUrls().size() : 0);
+
+        return updatedMagazine.getId();
     }
 
     /**

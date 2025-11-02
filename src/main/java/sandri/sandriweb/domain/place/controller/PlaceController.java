@@ -32,7 +32,8 @@ public class PlaceController {
 
     @GetMapping("/{placeId}")
     @Operation(summary = "관광지 상세 정보 조회", 
-               description = "관광지의 상세 정보를 조회합니다. 이름, 주소, 평점, 카테고리, 사진, 리뷰, 근처 가볼만한 곳을 반환합니다.")
+               description = "관광지의 기본 정보를 조회합니다. 이름, 주소, 평점, 카테고리, 공식 사진, 근처 가볼만한 곳을 반환합니다. " +
+                           "리뷰 정보는 /api/reviews/places/{placeId} API를 별도로 호출하세요.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
@@ -40,25 +41,12 @@ public class PlaceController {
     })
     public ResponseEntity<ApiResponseDto<PlaceDetailResponseDto>> getPlaceDetail(
             @Parameter(description = "관광지 ID", example = "1")
-            @PathVariable Long placeId,
-            @Parameter(description = "조회할 리뷰 개수", example = "3")
-            @RequestParam(defaultValue = "3") int reviewCount,
-            @Parameter(description = "조회할 리뷰 사진 개수", example = "3")
-            @RequestParam(defaultValue = "3") int reviewPhotoCount,
-            @Parameter(description = "리뷰 정렬 기준 (latest: 최신순, rating_high: 평점 높은 순, rating_low: 평점 낮은 순)", example = "latest")
-            @RequestParam(defaultValue = "latest") String reviewSort) {
+            @PathVariable Long placeId) {
 
-        log.info("관광지 상세 정보 조회: placeId={}, reviewCount={}, reviewPhotoCount={}, reviewSort={}", 
-                 placeId, reviewCount, reviewPhotoCount, reviewSort);
+        log.info("관광지 상세 정보 조회: placeId={}", placeId);
 
         try {
-            // 정렬 옵션 검증
-            if (!isValidReviewSort(reviewSort)) {
-                return ResponseEntity.badRequest()
-                        .body(ApiResponseDto.error("정렬 기준은 'latest', 'rating_high', 'rating_low' 중 하나여야 합니다."));
-            }
-            
-            PlaceDetailResponseDto response = placeService.getPlaceDetail(placeId, reviewCount, reviewPhotoCount, reviewSort);
+            PlaceDetailResponseDto response = placeService.getPlaceDetail(placeId);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (RuntimeException e) {
             log.error("관광지 상세 정보 조회 실패: {}", e.getMessage());
@@ -223,9 +211,5 @@ public class PlaceController {
         }
     }
 
-    private boolean isValidReviewSort(String sort) {
-        return sort != null &&
-               (sort.equals("latest") || sort.equals("rating_high") || sort.equals("rating_low"));
-    }
 }
 

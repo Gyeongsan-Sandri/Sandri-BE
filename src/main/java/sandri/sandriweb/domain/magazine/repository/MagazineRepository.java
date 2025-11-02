@@ -16,14 +16,12 @@ public interface MagazineRepository extends JpaRepository<Magazine, Long> {
     /**
      * Magazine과 MagazineCard를 함께 조회 (FETCH JOIN)
      * @param magazineId 매거진 ID
-     * @return Magazine (cards 포함)
+     * @return Magazine (cards 포함, enabled 필터링은 Java에서 처리)
      */
     @Query("SELECT DISTINCT m FROM Magazine m " +
            "LEFT JOIN FETCH m.cards c " +
            "WHERE m.id = :magazineId " +
-           "AND m.enabled = true " +
-           "AND (c.enabled IS NULL OR c.enabled = true) " +
-           "ORDER BY c.createdAt ASC")
+           "AND m.enabled = true")
     Optional<Magazine> findByIdWithCards(@Param("magazineId") Long magazineId);
 
     /**

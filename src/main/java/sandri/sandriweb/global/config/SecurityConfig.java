@@ -40,6 +40,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/reviews/**").permitAll()
                         .requestMatchers("/api/advertise/**").permitAll() // 광고 조회는 인증 없이 가능
                         .requestMatchers("/api/magazines/**").permitAll() // 매거진 조회는 인증 없이 가능
+                        .requestMatchers("/api/admin/**").permitAll() // 관리자 API는 인증 없이 가능
                         .requestMatchers("/api/me/**").authenticated() // 마이페이지 관련 API는 인증 필요
                         .requestMatchers("/api/routes/share/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()

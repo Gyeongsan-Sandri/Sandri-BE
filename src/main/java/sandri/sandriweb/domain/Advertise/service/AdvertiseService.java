@@ -6,6 +6,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sandri.sandriweb.domain.advertise.dto.AdDto;
 import sandri.sandriweb.domain.advertise.dto.AdResponseDto;
+import sandri.sandriweb.domain.advertise.dto.CreateOfficialAdRequestDto;
+import sandri.sandriweb.domain.advertise.dto.CreatePrivateAdRequestDto;
 import sandri.sandriweb.domain.advertise.entity.OfficialAd;
 import sandri.sandriweb.domain.advertise.entity.PrivateAd;
 import sandri.sandriweb.domain.advertise.repository.OfficialAdRepository;
@@ -73,6 +75,52 @@ public class AdvertiseService {
                 .description(ad.getDescription())
                 .linkUrl(ad.getLinkUrl())
                 .build();
+    }
+
+    /**
+     * 공식 광고 생성 (관리자용)
+     * @param request 공식 광고 생성 요청 DTO
+     * @return 생성된 광고 ID
+     */
+    @Transactional
+    public Long createOfficialAd(CreateOfficialAdRequestDto request) {
+        OfficialAd ad = OfficialAd.builder()
+                .title(request.getTitle())
+                .description(request.getDescription())
+                .imageUrl(request.getImageUrl())
+                .linkUrl(request.getLinkUrl())
+                .startDate(request.getStartDate())
+                .endDate(request.getEndDate())
+                .displayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : 0)
+                .build();
+
+        OfficialAd savedAd = officialAdRepository.save(ad);
+        log.info("공식 광고 생성 완료: adId={}, title={}", savedAd.getId(), savedAd.getTitle());
+
+        return savedAd.getId();
+    }
+
+    /**
+     * 개인 광고 생성 (관리자용)
+     * @param request 개인 광고 생성 요청 DTO
+     * @return 생성된 광고 ID
+     */
+    @Transactional
+    public Long createPrivateAd(CreatePrivateAdRequestDto request) {
+        PrivateAd ad = PrivateAd.builder()
+                .title(request.getTitle())
+                .description(request.getDescription())
+                .imageUrl(request.getImageUrl())
+                .linkUrl(request.getLinkUrl())
+                .startDate(request.getStartDate())
+                .endDate(request.getEndDate())
+                .displayOrder(request.getDisplayOrder() != null ? request.getDisplayOrder() : 0)
+                .build();
+
+        PrivateAd savedAd = privateAdRepository.save(ad);
+        log.info("개인 광고 생성 완료: adId={}, title={}", savedAd.getId(), savedAd.getTitle());
+
+        return savedAd.getId();
     }
 
     /**

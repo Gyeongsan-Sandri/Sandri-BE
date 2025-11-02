@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import sandri.sandriweb.global.entity.BaseEntity;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -30,6 +31,18 @@ public class Magazine extends BaseEntity {
     @Column(name = "content")
     private String content;
 
-    @OneToMany(mappedBy = "magazine")
-    List<MagazineCard> cards;
+    @OneToMany(mappedBy = "magazine", fetch = FetchType.LAZY)
+    List<MagazineCard> cards = new ArrayList<>();
+
+    /**
+     * 매거진 정보 수정
+     * @param name 매거진 이름
+     * @param summary 매거진 요약
+     * @param content 매거진 내용
+     */
+    public void update(String name, String summary, String content) {
+        this.name = name;
+        this.summary = summary;
+        this.content = content;
+    }
 }
