@@ -31,17 +31,17 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
+    implementation 'com.google.zxing:core:3.5.2'
+    implementation 'com.google.zxing:javase:3.5.2'
     runtimeOnly 'com.mysql:mysql-connector-j'
     runtimeOnly 'com.h2database:h2'
 
     // Hibernate Spatial (Point 사용을 위함)
     implementation 'org.hibernate.orm:hibernate-spatial'
-    // JTS Core의 버전 명시를 제거하여 Spring Boot의 버전을 따르도록 합니다.
-    // 만약 오류가 지속되면 다시 버전을 명시하세요.
     implementation 'org.locationtech.jts:jts-core'
     implementation 'com.querydsl:querydsl-spatial'
 
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

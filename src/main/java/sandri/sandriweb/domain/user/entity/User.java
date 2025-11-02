@@ -38,13 +38,12 @@ public class User extends BaseEntity implements UserDetails {
     @Column(nullable = false)
     private Gender gender;
     
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private TelecomCarrier telecomCarrier;
+    @Column(nullable = false, length = 100)
+    private String location;
     
-    @Column(nullable = false, length = 20)
-    private String phoneNumber;
-    
+    @Column(length = 30)
+    private String referrerUsername;
+
     @Column(nullable = false, unique = true, length = 30)
     private String nickname;
     
@@ -56,7 +55,6 @@ public class User extends BaseEntity implements UserDetails {
     
     @Column(nullable = false)
     private boolean phoneVerified;
-
     // UserDetails 구현
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -88,6 +86,11 @@ public class User extends BaseEntity implements UserDetails {
         return true;
     }
     
+    @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
+    
     public void updatePassword(String password) {
         this.password = password;
     }
@@ -98,9 +101,5 @@ public class User extends BaseEntity implements UserDetails {
     
     public enum Gender {
         MALE, FEMALE, OTHER
-    }
-    
-    public enum TelecomCarrier {
-        KT, SKT, LG_U_PLUS, KT_MVNO, SKT_MVNO, LG_U_PLUS_MVNO
     }
 }
