@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.magazine.dto.MagazineDetailResponseDto;
@@ -14,9 +15,6 @@ import sandri.sandriweb.domain.magazine.dto.MagazineListDto;
 import sandri.sandriweb.domain.magazine.service.MagazineService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
-import sandri.sandriweb.domain.user.repository.UserRepository;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/magazines")
@@ -26,7 +24,6 @@ import java.util.List;
 public class MagazineController {
 
     private final MagazineService magazineService;
-    private final UserRepository userRepository;
 
     @GetMapping("/{magazineId}")
     @Operation(summary = "매거진 상세 조회",
@@ -62,29 +59,21 @@ public class MagazineController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    public ResponseEntity<ApiResponseDto<List<MagazineListDto>>> getMagazineList(
-            @Parameter(description = "조회할 개수", example = "10")
-            @RequestParam(defaultValue = "10") int count,
-            Authentication authentication) {
+    public ResponseEntity<ApiResponseDto<sandri.sandriweb.domain.magazine.dto.MagazineListCursorResponseDto>> getMagazineList(
+            @Parameter(description = "마지막으로 받은 매거진 ID(첫 조회 시 생략)", example = "15")
+            @RequestParam(required = false) Long lastMagazineId,
+            @Parameter(description = "페이지 크기", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @AuthenticationPrincipal User user) {
 
-        log.info("매거진 목록 조회: count={}", count);
+        log.info("매거진 목록 조회(커서): lastMagazineId={}, size={}", lastMagazineId, size);
 
         try {
-            // 사용자 ID 조회 (로그인한 경우)
-            Long userId = null;
-            if (authentication != null && authentication.isAuthenticated()) {
-                try {
-                    User user = userRepository.findByUsername(authentication.getName())
-                            .orElse(null);
-                    if (user != null) {
-                        userId = user.getId();
-                    }
-                } catch (Exception e) {
-                    log.debug("사용자 정보 조회 실패 (무시): {}", e.getMessage());
-                }
-            }
+            // 사용자 ID 조회 (로그인한 경우) - @AuthenticationPrincipal로 최적화
+            Long userId = (user != null) ? user.getId() : null;
 
-            List<MagazineListDto> response = magazineService.getMagazineList(count, userId);
+            sandri.sandriweb.domain.magazine.dto.MagazineListCursorResponseDto response =
+                    magazineService.getMagazineListByCursor(lastMagazineId, size, userId);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (Exception e) {
             log.error("매거진 목록 조회 중 오류 발생: ", e);
@@ -105,20 +94,16 @@ public class MagazineController {
     public ResponseEntity<ApiResponseDto<Boolean>> toggleLike(
             @Parameter(description = "매거진 ID", example = "1")
             @PathVariable Long magazineId,
-            Authentication authentication) {
+            @AuthenticationPrincipal User user) {
 
         log.info("매거진 좋아요 토글: magazineId={}", magazineId);
 
         try {
             // 인증 확인
-            if (authentication == null || !authentication.isAuthenticated()) {
+            if (user == null) {
                 return ResponseEntity.status(401)
                         .body(ApiResponseDto.error("로그인이 필요합니다."));
             }
-
-            // 사용자 ID 조회
-            User user = userRepository.findByUsername(authentication.getName())
-                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
 
             // 좋아요 토글
             boolean isLiked = magazineService.toggleLike(magazineId, user.getId());

@@ -21,6 +21,6 @@ public class UpdateMagazineRequestDto {
 
     private String content;
 
-    private List<String> cardUrls; // 매거진 카드 이미지 URL 리스트 (기존 카드는 모두 삭제되고 새로 추가됨)
+    private List<String> cardUrls; // 매거진 카드 이미지 URL 리스트 (수정 시 기존 카드는 모두 삭제되고 새로 추가됨)
 }
 

@@ -6,11 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import sandri.sandriweb.domain.magazine.dto.CreateMagazineRequestDto;
-import sandri.sandriweb.domain.magazine.dto.MagazineCardDto;
-import sandri.sandriweb.domain.magazine.dto.MagazineDetailResponseDto;
-import sandri.sandriweb.domain.magazine.dto.MagazineListDto;
-import sandri.sandriweb.domain.magazine.dto.UpdateMagazineRequestDto;
+import sandri.sandriweb.domain.magazine.dto.*;
 import sandri.sandriweb.domain.magazine.entity.Magazine;
 import sandri.sandriweb.domain.magazine.entity.MagazineCard;
 import sandri.sandriweb.domain.magazine.entity.mapping.UserMagazine;
@@ -38,7 +34,7 @@ public class MagazineService {
     private final UserMagazineRepository userMagazineRepository;
     private final UserRepository userRepository;
 
-    /**
+    /*
      * 매거진 상세 조회 (카드뉴스 포함)
      * @param magazineId 매거진 ID
      * @return 매거진 상세 정보와 카드뉴스 리스트
@@ -49,17 +45,10 @@ public class MagazineService {
         Magazine magazine = magazineRepository.findByIdWithCards(magazineId)
                 .orElseThrow(() -> new RuntimeException("매거진을 찾을 수 없습니다."));
 
-        // 2. MagazineCard를 DTO로 변환 (enabled된 카드만, createdAt 순으로 정렬)
+        // 2. MagazineCard를 DTO로 변환 (DB에서 이미 enabled 필터링 및 order 정렬됨)
         List<MagazineCardDto> cardDtos = new ArrayList<>();
         if (magazine.getCards() != null && !magazine.getCards().isEmpty()) {
             cardDtos = magazine.getCards().stream()
-                    .filter(BaseEntity::isEnabled) // enabled된 카드만 필터링
-                    .sorted((c1, c2) -> {
-                        if (c1.getCreatedAt() == null && c2.getCreatedAt() == null) return 0;
-                        if (c1.getCreatedAt() == null) return 1;
-                        if (c2.getCreatedAt() == null) return -1;
-                        return c1.getCreatedAt().compareTo(c2.getCreatedAt()); // 오름차순 정렬
-                    })
                     .map(this::convertToCardDto)
                     .collect(Collectors.toList());
         }
@@ -78,31 +67,24 @@ public class MagazineService {
                 .build();
     }
 
-    /**
-     * 매거진 목록 조회
-     * @param count 조회할 개수
+    /*
+     * 커서 기반 매거진 목록 조회 (썸네일만 포함)
+     * @param lastMagazineId 마지막으로 조회한 매거진 ID (첫 조회시 null)
+     * @param size 페이지 크기
      * @param userId 사용자 ID (로그인한 경우에만 제공, null 가능)
      * @return 매거진 목록 (제목, 썸네일, 요약, 좋아요 여부)
      */
     @Transactional(readOnly = true)
-    public List<MagazineListDto> getMagazineList(int count, Long userId) {
-        // enabled된 매거진 조회 (최신순)
-        Pageable pageable = PageRequest.of(0, count);
-        List<Magazine> magazines = magazineRepository.findEnabledMagazinesOrderByCreatedAtDesc(pageable);
+    public MagazineListCursorResponseDto getMagazineListByCursor(Long lastMagazineId, int size, Long userId) {
+        // 1. size + 1개 조회하여 다음 페이지 여부 판단
+        Pageable pageable = PageRequest.of(0, size + 1);
+        List<Magazine> all = magazineRepository.findEnabledWithThumbnailByCursor(lastMagazineId, pageable);
 
-        // 각 매거진의 첫 번째 카드 조회를 위해 FETCH JOIN 필요
-        List<Long> magazineIds = magazines.stream()
-                .map(Magazine::getId)
-                .collect(Collectors.toList());
+        boolean hasNext = all.size() > size;
+        List<Magazine> pageItems = hasNext ? all.subList(0, size) : all;
 
-        // 매거진과 첫 번째 카드를 함께 조회
-        List<Magazine> magazinesWithCards = magazineIds.stream()
-                .map(magazineRepository::findByIdWithCards)
-                .filter(java.util.Optional::isPresent)
-                .map(java.util.Optional::get)
-                .toList();
-
-        // 사용자가 좋아요한 매거진 ID 조회 (로그인한 경우)
+        // 2. 사용자가 좋아요한 매거진 ID 조회 (로그인한 경우)
+        List<Long> magazineIds = pageItems.stream().map(Magazine::getId).collect(Collectors.toList());
         Map<Long, Boolean> likedMagazineIds;
         if (userId != null) {
             List<Long> likedIds = userMagazineRepository.findLikedMagazineIdsByUserId(userId, magazineIds);
@@ -115,15 +97,16 @@ public class MagazineService {
             likedMagazineIds = new HashMap<>();
         }
 
-        // DTO 변환
-        return magazinesWithCards.stream()
+        // 3. DTO 변환
+        List<MagazineListDto> content = pageItems.stream()
                 .map(magazine -> {
-                    // 첫 번째 enabled된 카드 찾기
-                    MagazineCard firstCard = magazine.getCards().stream()
-                            .filter(MagazineCard::isEnabled).min((c1, c2) -> c1.getCreatedAt().compareTo(c2.getCreatedAt()))
-                            .orElse(null);
-
-                    String thumbnail = firstCard != null ? firstCard.getCardUrl() : null;
+                    // 썸네일 가져오기 (order = 0인 카드만 fetch join되어 있음)
+                    String thumbnail = null;
+                    if (magazine.getCards() != null && !magazine.getCards().isEmpty()) {
+                        // fetch join으로 가져온 카드는 order = 0이고 enabled = true인 카드만 존재
+                        MagazineCard thumbnailCard = magazine.getCards().get(0);
+                        thumbnail = thumbnailCard != null ? thumbnailCard.getCardUrl() : null;
+                    }
 
                     // 사용자가 좋아요한 매거진인지 확인
                     Boolean isLiked = userId != null ? likedMagazineIds.getOrDefault(magazine.getId(), false) : null;
@@ -137,9 +120,25 @@ public class MagazineService {
                             .build();
                 })
                 .collect(Collectors.toList());
+
+        // 다음 커서 설정 (hasNext가 true이고 항목이 있을 때만 마지막 항목의 ID를 커서로 사용)
+        Long nextCursor = (hasNext && !pageItems.isEmpty()) 
+                ? pageItems.get(pageItems.size() - 1).getId() 
+                : null;
+
+        // 전체 매거진 개수 조회
+        long totalCount = magazineRepository.countByEnabledTrue();
+
+        return MagazineListCursorResponseDto.builder()
+                .magazines(content)
+                .size(size)
+                .nextCursor(nextCursor)
+                .hasNext(hasNext)
+                .totalCount(totalCount)
+                .build();
     }
 
-    /**
+    /*
      * 매거진 좋아요 토글
      * @param magazineId 매거진 ID
      * @param userId 사용자 ID
@@ -147,13 +146,15 @@ public class MagazineService {
      */
     @Transactional
     public boolean toggleLike(Long magazineId, Long userId) {
-        // 매거진 존재 확인
-        Magazine magazine = magazineRepository.findById(magazineId)
-                .orElseThrow(() -> new RuntimeException("매거진을 찾을 수 없습니다."));
+        // 매거진 존재 확인 (exists로 최적화 가능하지만, 이후 매거진 객체가 필요할 수 있어서 유지)
+        if (!magazineRepository.existsById(magazineId)) {
+            throw new RuntimeException("매거진을 찾을 수 없습니다.");
+        }
         
-        // 사용자 존재 확인
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+        // 사용자 존재 확인 (exists로 최적화)
+        if (!userRepository.existsById(userId)) {
+            throw new RuntimeException("사용자를 찾을 수 없습니다.");
+        }
         
         // 기존 좋아요 조회
         return userMagazineRepository.findByUserIdAndMagazineId(userId, magazineId)
@@ -170,7 +171,9 @@ public class MagazineService {
                     }
                 })
                 .orElseGet(() -> {
-                    // 좋아요가 없는 경우: 새로 생성
+                    // 좋아요가 없는 경우: 새로 생성 (User와 Magazine은 프록시로 로드)
+                    User user = userRepository.getReferenceById(userId);
+                    Magazine magazine = magazineRepository.getReferenceById(magazineId);
                     UserMagazine newUserMagazine = UserMagazine.builder()
                             .user(user)
                             .magazine(magazine)
@@ -180,7 +183,25 @@ public class MagazineService {
                 });
     }
 
-    /**
+    // createMagazineCards, updateMagazineCards 헬퍼 메소드    
+    private List<MagazineCard> createMagazineCards(Magazine magazine, List<String> cardUrls) {
+        if (cardUrls == null || cardUrls.isEmpty()) {
+            return List.of(); // Java 9+에서는 List.of() 사용 권장
+        }
+
+        List<MagazineCard> cards = new ArrayList<>();
+        for (int i = 0; i < cardUrls.size(); i++) {
+            MagazineCard card = MagazineCard.builder()
+                    .magazine(magazine)
+                    .cardUrl(cardUrls.get(i))
+                    .order(i)
+                    .build();
+            cards.add(card);
+        }
+        return cards;
+    }
+
+    /*
      * 매거진 생성 (관리자용)
      * @param request 매거진 생성 요청 DTO
      * @return 생성된 매거진 ID
@@ -197,37 +218,20 @@ public class MagazineService {
         Magazine savedMagazine = magazineRepository.save(magazine);
 
         // 2. 매거진 카드 생성 (순서대로)
-        if (request.getCardUrls() != null && !request.getCardUrls().isEmpty()) {
-            log.info("매거진 카드 생성 시작: magazineId={}, cardUrlsCount={}", 
-                     savedMagazine.getId(), request.getCardUrls().size());
-            
-            List<MagazineCard> cards = request.getCardUrls().stream()
-                    .map(cardUrl -> MagazineCard.builder()
-                            .magazine(savedMagazine)
-                            .cardUrl(cardUrl)
-                            .build())
-                    .collect(Collectors.toList());
-
-            List<MagazineCard> savedCards = magazineCardRepository.saveAll(cards);
-            log.info("매거진 카드 {}개 추가 완료: magazineId={}, savedCardsCount={}", 
-                     cards.size(), savedMagazine.getId(), savedCards.size());
-            
-            // 저장 직후 확인
-            List<MagazineCard> verifyCards = magazineCardRepository.findByMagazineId(savedMagazine.getId());
-            log.info("매거진 카드 저장 확인: magazineId={}, verifiedCount={}", 
-                     savedMagazine.getId(), verifyCards.size());
-        } else {
-            log.info("매거진 카드 없음: magazineId={}", savedMagazine.getId());
+        List<MagazineCard> cards = createMagazineCards(savedMagazine, request.getCardUrls());
+        if (!cards.isEmpty()) {
+            magazineCardRepository.saveAll(cards);
+            log.info("매거진 카드 {}개 추가 완료: magazineId={}", cards.size(), savedMagazine.getId());
         }
 
-        log.info("매거진 생성 완료: magazineId={}, name={}, cardCount={}", 
-                 savedMagazine.getId(), savedMagazine.getName(), 
+        log.info("매거진 생성 완료: magazineId={}, name={}, cardCount={}",
+                 savedMagazine.getId(), savedMagazine.getName(),
                  request.getCardUrls() != null ? request.getCardUrls().size() : 0);
 
         return savedMagazine.getId();
     }
 
-    /**
+    /*
      * 매거진 수정 (관리자용)
      * @param magazineId 매거진 ID
      * @param request 매거진 수정 요청 DTO
@@ -241,33 +245,23 @@ public class MagazineService {
 
         // 1. 매거진 정보 수정
         magazine.update(request.getName(), request.getSummary(), request.getContent());
-        Magazine updatedMagazine = magazineRepository.save(magazine);
 
-        // 2. 기존 카드 삭제
-        List<MagazineCard> existingCards = magazineCardRepository.findByMagazineId(magazineId);
-        if (!existingCards.isEmpty()) {
-            magazineCardRepository.deleteAll(existingCards);
-            log.info("기존 매거진 카드 {}개 삭제 완료: magazineId={}", existingCards.size(), magazineId);
+        // 2. 기존 카드 제거 및 새로운 카드 추가 (orphanRemoval로 자동 삭제)
+        magazine.getCards().clear();
+        
+        // 3. 새로운 카드 생성 및 추가
+        List<MagazineCard> newCards = createMagazineCards(magazine, request.getCardUrls());
+        if (!newCards.isEmpty()) {
+            magazine.getCards().addAll(newCards);
+            log.info("매거진 카드 {}개 교체 완료 (기존 카드는 자동 삭제됨): magazineId={}", 
+                     newCards.size(), magazineId);
         }
 
-        // 3. 새로운 카드 생성 (순서대로)
-        if (request.getCardUrls() != null && !request.getCardUrls().isEmpty()) {
-            List<MagazineCard> newCards = request.getCardUrls().stream()
-                    .map(cardUrl -> MagazineCard.builder()
-                            .magazine(updatedMagazine)
-                            .cardUrl(cardUrl)
-                            .build())
-                    .collect(Collectors.toList());
-
-            magazineCardRepository.saveAll(newCards);
-            log.info("매거진 카드 {}개 추가 완료: magazineId={}", newCards.size(), magazineId);
-        }
-
-        log.info("매거진 수정 완료: magazineId={}, name={}, cardCount={}", 
-                 updatedMagazine.getId(), updatedMagazine.getName(), 
+        log.info("매거진 수정 완료: magazineId={}, name={}, cardCount={}",
+                 magazine.getId(), magazine.getName(),
                  request.getCardUrls() != null ? request.getCardUrls().size() : 0);
 
-        return updatedMagazine.getId();
+        return magazine.getId();
     }
 
     /**
@@ -275,7 +269,7 @@ public class MagazineService {
      */
     private MagazineCardDto convertToCardDto(MagazineCard card) {
         return MagazineCardDto.builder()
-                .cardId(card.getId())
+                .order(card.getOrder())
                 .cardUrl(card.getCardUrl())
                 .build();
     }
