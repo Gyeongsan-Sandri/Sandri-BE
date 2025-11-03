@@ -25,8 +25,9 @@ public class PlaceDetailResponseDto {
     private String summary;
     private String information;
     private List<String> officialPhotos; // 공식 사진들
-    private List<String> reviewPhotos; // 리뷰 사진들 (요청 개수만큼)
-    private List<ReviewDto> reviews; // 리뷰들 (요청 개수만큼)
-    private List<NearbyPlaceDto> nearbyPlaces; // 근처 가볼만한 곳
+    // 리뷰 사진, 리뷰 목록, 근처 장소는 별도 API로 조회:
+    // - GET /api/reviews/photos?placeId={placeId}&count={count}
+    // - GET /api/reviews?placeId={placeId}&page={page}&size={size}&sort={sort}
+    // - GET /api/places/{placeId}/nearby?category={category}&count={count}
 }
 

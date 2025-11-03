@@ -55,7 +55,7 @@ public class AdminController {
         }
     }
 
-    @PostMapping("/places/photos")
+    @PostMapping("/places/{placeId}/photos")
     @Operation(summary = "장소 사진 추가",
                description = "관리자가 장소에 사진을 추가합니다.")
     @ApiResponses(value = {
@@ -64,12 +64,14 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "장소 없음")
     })
     public ResponseEntity<ApiResponseDto<Long>> createPlacePhoto(
+            @Parameter(description = "장소 ID", example = "1")
+            @PathVariable Long placeId,
             @Valid @RequestBody CreatePlacePhotoRequestDto request) {
 
-        log.info("장소 사진 추가 요청: placeId={}", request.getPlaceId());
+        log.info("장소 사진 추가 요청: placeId={}", placeId);
 
         try {
-            Long photoId = placeService.createPlacePhoto(request);
+            Long photoId = placeService.createPlacePhoto(placeId, request.getPhotoUrl());
             return ResponseEntity.ok(ApiResponseDto.success("장소 사진이 추가되었습니다.", photoId));
         } catch (RuntimeException e) {
             log.error("장소 사진 추가 실패: {}", e.getMessage());

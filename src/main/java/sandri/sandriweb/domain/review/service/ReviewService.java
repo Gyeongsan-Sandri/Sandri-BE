@@ -7,7 +7,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import sandri.sandriweb.domain.place.dto.PageResponseDto;
+import sandri.sandriweb.domain.place.dto.CursorResponseDto;
 import sandri.sandriweb.domain.place.dto.ReviewDto;
 import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
@@ -23,6 +23,7 @@ import sandri.sandriweb.global.service.S3Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -111,18 +112,7 @@ public class ReviewService {
         PlaceReview updatedReview = placeReviewRepository.save(review);
 
         // 기존 사진 삭제
-        List<PlaceReviewPhoto> existingPhotos = placeReviewPhotoRepository.findByPlaceReviewId(reviewId);
-        if (!existingPhotos.isEmpty()) {
-            // S3에서 기존 사진 삭제
-            existingPhotos.forEach(photo -> {
-                try {
-                    s3Service.deleteFile(photo.getPhotoUrl());
-                } catch (Exception e) {
-                    log.warn("S3 파일 삭제 실패 (무시): {}", photo.getPhotoUrl(), e);
-                }
-            });
-            placeReviewPhotoRepository.deleteAll(existingPhotos);
-        }
+        deleteReviewPhotos(reviewId);
 
         // 새로운 사진 저장
         List<PlaceReviewPhoto> newPhotos = new ArrayList<>();
@@ -163,17 +153,7 @@ public class ReviewService {
         }
 
         // 리뷰에 연결된 사진들 삭제 (S3에서도 삭제)
-        List<PlaceReviewPhoto> photos = placeReviewPhotoRepository.findByPlaceReviewId(reviewId);
-        if (!photos.isEmpty()) {
-            photos.forEach(photo -> {
-                try {
-                    s3Service.deleteFile(photo.getPhotoUrl());
-                } catch (Exception e) {
-                    log.warn("S3 파일 삭제 실패 (무시): {}", photo.getPhotoUrl(), e);
-                }
-            });
-            placeReviewPhotoRepository.deleteAll(photos);
-        }
+        deleteReviewPhotos(reviewId);
 
         // 리뷰 삭제
         placeReviewRepository.delete(review);
@@ -182,63 +162,53 @@ public class ReviewService {
     }
 
     /**
-     * 리뷰 목록 조회 (페이징)
+     * 리뷰 목록 조회 (커서 기반 페이징)
      * @param placeId 관광지 ID
-     * @param page 페이지 번호 (0부터 시작)
+     * @param lastReviewId 마지막으로 조회한 리뷰 ID (첫 조회시 null)
      * @param size 페이지 크기
      * @param sort 정렬 기준 (latest: 최신순, rating_high: 평점 높은 순, rating_low: 평점 낮은 순)
-     * @return 페이징된 리뷰 목록
+     * @return 커서 기반 페이징된 리뷰 목록
      */
     @Transactional(readOnly = true)
-    public PageResponseDto<ReviewDto> getReviews(Long placeId, int page, int size, String sort) {
-        // Pageable 생성 (0부터 시작)
-        Pageable pageable = PageRequest.of(page, size);
+    public CursorResponseDto<ReviewDto> getReviews(Long placeId, Long lastReviewId, int size, String sort) {
+        // size + 1개를 가져와서 다음 페이지 존재 여부 확인
+        Pageable pageable = PageRequest.of(0, size + 1);
         
         // 정렬 옵션에 따라 다른 메서드 호출
-        Page<PlaceReview> reviewPage;
+        List<PlaceReview> allReviews;
         switch (sort) {
             case "rating_high":
-                reviewPage = placeReviewRepository.findReviewsByPlaceIdOrderByRatingDescWithPaging(placeId, pageable);
+                allReviews = placeReviewRepository.findReviewsByPlaceIdOrderByRatingDescWithCursor(placeId, lastReviewId, pageable);
                 break;
             case "rating_low":
-                reviewPage = placeReviewRepository.findReviewsByPlaceIdOrderByRatingAscWithPaging(placeId, pageable);
+                allReviews = placeReviewRepository.findReviewsByPlaceIdOrderByRatingAscWithCursor(placeId, lastReviewId, pageable);
                 break;
             case "latest":
             default:
-                reviewPage = placeReviewRepository.findReviewsByPlaceIdOrderByLatestWithPaging(placeId, pageable);
+                allReviews = placeReviewRepository.findReviewsByPlaceIdOrderByLatestWithCursor(placeId, lastReviewId, pageable);
                 break;
         }
         
-        // DTO 변환
-        List<ReviewDto> reviewDtos = reviewPage.getContent().stream()
-                .map(ReviewDto::from)
-                .collect(Collectors.toList());
-        
-        // PageResponseDto 생성
-        return PageResponseDto.<ReviewDto>builder()
-                .content(reviewDtos)
-                .page(reviewPage.getNumber())
-                .size(reviewPage.getSize())
-                .totalElements(reviewPage.getTotalElements())
-                .totalPages(reviewPage.getTotalPages())
-                .hasNext(reviewPage.hasNext())
-                .hasPrevious(reviewPage.hasPrevious())
-                .build();
+        // 커서 기반 페이징 처리
+        return buildCursorResponse(allReviews, size, ReviewDto::from, PlaceReview::getId);
     }
 
     /**
-     * 리뷰 사진 목록 조회
+     * 리뷰 사진 목록 조회 (커서 기반 페이징)
      * @param placeId 관광지 ID
-     * @param count 조회할 사진 개수
-     * @return 리뷰 사진 URL 리스트
+     * @param lastPhotoId 마지막으로 조회한 사진 ID (첫 조회시 null)
+     * @param size 페이지 크기
+     * @return 커서 기반 페이징된 리뷰 사진 URL 리스트
      */
     @Transactional(readOnly = true)
-    public List<String> getReviewPhotos(Long placeId, int count) {
-        List<PlaceReviewPhoto> reviewPhotos = placeReviewPhotoRepository.findByPlaceId(placeId);
-        return reviewPhotos.stream()
-                .limit(count)
-                .map(PlaceReviewPhoto::getPhotoUrl)
-                .collect(Collectors.toList());
+    public CursorResponseDto<String> getReviewPhotos(Long placeId, Long lastPhotoId, int size) {
+        // size + 1개를 가져와서 다음 페이지 존재 여부 확인
+        Pageable pageable = PageRequest.of(0, size + 1);
+        
+        List<PlaceReviewPhoto> allPhotos = placeReviewPhotoRepository.findByPlaceIdWithCursor(placeId, lastPhotoId, pageable);
+        
+        // 커서 기반 페이징 처리
+        return buildCursorResponse(allPhotos, size, PlaceReviewPhoto::getPhotoUrl, PlaceReviewPhoto::getId);
     }
 
     /**
@@ -303,35 +273,81 @@ public class ReviewService {
     }
 
     /**
-     * 내가 작성한 리뷰 목록 조회 (페이징)
+     * 내가 작성한 리뷰 목록 조회 (커서 기반 페이징)
      * @param userId 사용자 ID
-     * @param page 페이지 번호 (0부터 시작)
+     * @param lastReviewId 마지막으로 조회한 리뷰 ID (첫 조회시 null)
      * @param size 페이지 크기
-     * @return 페이징된 리뷰 목록
+     * @return 커서 기반 페이징된 리뷰 목록
      */
     @Transactional(readOnly = true)
-    public PageResponseDto<ReviewDto> getMyReviews(Long userId, int page, int size) {
-        // Pageable 생성 (0부터 시작)
-        Pageable pageable = PageRequest.of(page, size);
+    public CursorResponseDto<ReviewDto> getMyReviews(Long userId, Long lastReviewId, int size) {
+        // size + 1개를 가져와서 다음 페이지 존재 여부 확인
+        Pageable pageable = PageRequest.of(0, size + 1);
 
-        // 최신순으로 내가 작성한 리뷰 조회
-        Page<PlaceReview> reviewPage = placeReviewRepository.findReviewsByUserIdOrderByLatestWithPaging(userId, pageable);
+        // 최신순으로 내가 작성한 리뷰 조회 (커서 기반)
+        List<PlaceReview> allReviews = placeReviewRepository.findReviewsByUserIdOrderByLatestWithCursor(userId, lastReviewId, pageable);
+
+        // 커서 기반 페이징 처리
+        return buildCursorResponse(allReviews, size, ReviewDto::from, PlaceReview::getId);
+    }
+
+    /**
+     * 커서 기반 페이징 응답 생성 (공통 헬퍼 메서드)
+     * @param allItems 전체 아이템 리스트 (size + 1개)
+     * @param size 요청한 페이지 크기
+     * @param mapper 아이템을 DTO로 변환하는 함수
+     * @param idExtractor 아이템의 ID를 추출하는 함수 (커서용)
+     * @return 커서 기반 페이징 응답
+     */
+    private <T, D> CursorResponseDto<D> buildCursorResponse(
+            List<T> allItems,
+            int size,
+            Function<T, D> mapper,
+            Function<T, Long> idExtractor) {
+        
+        // size + 1개를 확인하여 다음 페이지 존재 여부 판단
+        boolean hasNext = allItems.size() > size;
+        List<T> items = hasNext 
+                ? allItems.subList(0, size) 
+                : allItems;
 
         // DTO 변환
-        List<ReviewDto> reviewDtos = reviewPage.getContent().stream()
-                .map(ReviewDto::from)
+        List<D> content = items.stream()
+                .map(mapper)
                 .collect(Collectors.toList());
 
-        // PageResponseDto 생성
-        return PageResponseDto.<ReviewDto>builder()
-                .content(reviewDtos)
-                .page(reviewPage.getNumber())
-                .size(reviewPage.getSize())
-                .totalElements(reviewPage.getTotalElements())
-                .totalPages(reviewPage.getTotalPages())
-                .hasNext(reviewPage.hasNext())
-                .hasPrevious(reviewPage.hasPrevious())
+        // 마지막 아이템 ID 추출 (다음 커서)
+        Long nextCursor = null;
+        if (hasNext && !items.isEmpty()) {
+            nextCursor = idExtractor.apply(items.get(items.size() - 1));
+        }
+
+        // CursorResponseDto 생성
+        return CursorResponseDto.<D>builder()
+                .content(content)
+                .size(size)
+                .nextCursor(nextCursor)
+                .hasNext(hasNext)
                 .build();
+    }
+
+    /**
+     * 리뷰에 연결된 사진 삭제 (S3 및 DB에서 삭제)
+     * @param reviewId 리뷰 ID
+     */
+    private void deleteReviewPhotos(Long reviewId) {
+        List<PlaceReviewPhoto> photos = placeReviewPhotoRepository.findByPlaceReviewId(reviewId);
+        if (!photos.isEmpty()) {
+            // S3에서 기존 사진 삭제
+            photos.forEach(photo -> {
+                try {
+                    s3Service.deleteFile(photo.getPhotoUrl());
+                } catch (Exception e) {
+                    log.warn("S3 파일 삭제 실패 (무시): {}", photo.getPhotoUrl(), e);
+                }
+            });
+            placeReviewPhotoRepository.deleteAll(photos);
+        }
     }
 }
 

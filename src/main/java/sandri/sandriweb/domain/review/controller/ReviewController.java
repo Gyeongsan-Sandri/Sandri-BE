@@ -10,12 +10,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-import sandri.sandriweb.domain.place.dto.PageResponseDto;
+import sandri.sandriweb.domain.place.dto.CursorResponseDto;
 import sandri.sandriweb.domain.place.dto.ReviewDto;
 import sandri.sandriweb.domain.review.dto.CreateReviewRequestDto;
+import sandri.sandriweb.domain.review.dto.GetPresignedUrlsResponseDto;
+import sandri.sandriweb.domain.review.dto.PresignedUrlDto;
+import sandri.sandriweb.domain.review.dto.RequestPresignedUrlRequestDto;
 import sandri.sandriweb.domain.review.dto.UpdateReviewRequestDto;
-import sandri.sandriweb.domain.review.dto.UploadFileResponseDto;
 import sandri.sandriweb.domain.review.service.ReviewService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
@@ -25,35 +26,34 @@ import sandri.sandriweb.global.service.S3Service;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/reviews")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "리뷰", description = "리뷰 조회 관련 API")
+@Tag(name = "리뷰", description = "리뷰 관련 API")
 public class ReviewController {
 
     private final ReviewService reviewService;
     private final UserRepository userRepository;
     private final S3Service s3Service;
 
-    @GetMapping("/places/{placeId}")
-    @Operation(summary = "리뷰 목록 조회 (페이징)", 
-               description = "관광지의 리뷰 목록을 페이징하여 조회합니다. 정렬 옵션과 페이지 크기를 지정할 수 있습니다.")
+    @GetMapping("/api/places/{placeId}/reviews")
+    @Operation(summary = "리뷰 목록 조회 (커서 기반 페이징)", 
+               description = "관광지의 리뷰 목록을 커서 기반으로 페이징하여 조회합니다. 마지막으로 조회한 리뷰 ID를 기준으로 다음 페이지를 가져옵니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "관광지 없음")
     })
-    public ResponseEntity<ApiResponseDto<PageResponseDto<ReviewDto>>> getReviews(
+    public ResponseEntity<ApiResponseDto<CursorResponseDto<ReviewDto>>> getReviews(
             @Parameter(description = "관광지 ID", example = "1")
             @PathVariable Long placeId,
-            @Parameter(description = "페이지 번호 (0부터 시작)", example = "0")
-            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "마지막으로 조회한 리뷰 ID (첫 조회시 생략)", example = "123")
+            @RequestParam(required = false) Long lastReviewId,
             @Parameter(description = "페이지 크기 (한 번에 조회할 개수)", example = "10")
             @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "정렬 기준 (latest: 최신순, rating_high: 평점 높은 순, rating_low: 평점 낮은 순)", example = "latest")
             @RequestParam(defaultValue = "latest") String sort) {
 
-        log.info("리뷰 목록 조회: placeId={}, page={}, size={}, sort={}", placeId, page, size, sort);
+        log.info("리뷰 목록 조회 (커서): placeId={}, lastReviewId={}, size={}, sort={}", placeId, lastReviewId, size, sort);
 
         try {
             // 정렬 옵션 검증
@@ -62,19 +62,13 @@ public class ReviewController {
                         .body(ApiResponseDto.error("정렬 기준은 'latest', 'rating_high', 'rating_low' 중 하나여야 합니다."));
             }
             
-            // 페이지 번호 유효성 검증
-            if (page < 0) {
-                return ResponseEntity.badRequest()
-                        .body(ApiResponseDto.error("페이지 번호는 0 이상이어야 합니다."));
-            }
-            
             // 페이지 크기 유효성 검증
             if (size <= 0 || size > 100) {
                 return ResponseEntity.badRequest()
                         .body(ApiResponseDto.error("페이지 크기는 1 이상 100 이하여야 합니다."));
             }
 
-            PageResponseDto<ReviewDto> response = reviewService.getReviews(placeId, page, size, sort);
+            CursorResponseDto<ReviewDto> response = reviewService.getReviews(placeId, lastReviewId, size, sort);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (RuntimeException e) {
             log.error("리뷰 목록 조회 실패: {}", e.getMessage());
@@ -86,30 +80,32 @@ public class ReviewController {
         }
     }
 
-    @GetMapping("/places/{placeId}/photos")
-    @Operation(summary = "리뷰 사진 목록 조회", 
-               description = "관광지의 리뷰 사진 목록을 조회합니다. 요청한 개수만큼 반환됩니다.")
+    @GetMapping("/api/places/{placeId}/reviews/photos")
+    @Operation(summary = "리뷰 사진 목록 조회 (커서 기반 페이징)", 
+               description = "관광지의 리뷰 사진 목록을 커서 기반으로 페이징하여 조회합니다. 마지막으로 조회한 사진 ID를 기준으로 다음 페이지를 가져옵니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "관광지 없음")
     })
-    public ResponseEntity<ApiResponseDto<List<String>>> getReviewPhotos(
+    public ResponseEntity<ApiResponseDto<CursorResponseDto<String>>> getReviewPhotos(
             @Parameter(description = "관광지 ID", example = "1")
             @PathVariable Long placeId,
-            @Parameter(description = "조회할 사진 개수", example = "20")
-            @RequestParam(defaultValue = "20") int count) {
+            @Parameter(description = "마지막으로 조회한 사진 ID (첫 조회시 생략)", example = "123")
+            @RequestParam(required = false) Long lastPhotoId,
+            @Parameter(description = "페이지 크기 (한 번에 조회할 개수)", example = "20")
+            @RequestParam(defaultValue = "20") int size) {
 
-        log.info("리뷰 사진 목록 조회: placeId={}, count={}", placeId, count);
+        log.info("리뷰 사진 목록 조회 (커서): placeId={}, lastPhotoId={}, size={}", placeId, lastPhotoId, size);
 
         try {
-            // 개수 유효성 검증
-            if (count <= 0 || count > 100) {
+            // 페이지 크기 유효성 검증
+            if (size <= 0 || size > 100) {
                 return ResponseEntity.badRequest()
-                        .body(ApiResponseDto.error("조회할 개수는 1 이상 100 이하여야 합니다."));
+                        .body(ApiResponseDto.error("페이지 크기는 1 이상 100 이하여야 합니다."));
             }
 
-            List<String> response = reviewService.getReviewPhotos(placeId, count);
+            CursorResponseDto<String> response = reviewService.getReviewPhotos(placeId, lastPhotoId, size);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (RuntimeException e) {
             log.error("리뷰 사진 목록 조회 실패: {}", e.getMessage());
@@ -121,55 +117,58 @@ public class ReviewController {
         }
     }
 
-    @PostMapping("/api/me/reviews/files")
-    @Operation(summary = "리뷰 사진/영상 업로드", 
-               description = "리뷰에 첨부할 사진/영상을 AWS S3에 업로드합니다. 업로드된 URL을 반환합니다.")
+    @PostMapping("/api/me/reviews/files/presigned")
+    @Operation(summary = "리뷰 사진/영상 업로드용 Presigned URL 발급", 
+               description = "프론트엔드가 직접 S3에 파일을 업로드할 수 있도록 Presigned URL을 발급합니다. " +
+                           "발급받은 Presigned URL로 PUT 요청을 보내 파일을 업로드하고, 반환된 finalUrl을 리뷰 작성 시 photoUrls에 포함하세요.")
     @ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "파일 업로드 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Presigned URL 발급 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    public ResponseEntity<ApiResponseDto<UploadFileResponseDto>> uploadFiles(
+    public ResponseEntity<ApiResponseDto<GetPresignedUrlsResponseDto>> getPresignedUrls(
             Authentication authentication,
-            @Parameter(description = "업로드할 파일들 (사진/영상)", required = true)
-            @RequestParam("files") List<MultipartFile> files) {
+            @Valid @RequestBody RequestPresignedUrlRequestDto request) {
 
         String username = authentication.getName();
-        log.info("파일 업로드 요청: username={}, fileCount={}", username, files.size());
+        log.info("Presigned URL 발급 요청: username={}, fileCount={}", username, 
+                 request.getFiles() != null ? request.getFiles().size() : 0);
 
         try {
-            // 파일 개수 검증
-            if (files == null || files.isEmpty()) {
+            // 파일 정보 검증
+            if (request.getFiles() == null || request.getFiles().isEmpty()) {
                 return ResponseEntity.badRequest()
-                        .body(ApiResponseDto.error("업로드할 파일이 없습니다."));
+                        .body(ApiResponseDto.error("파일 정보가 필요합니다."));
             }
 
             // 파일 개수 제한 (최대 10개)
-            if (files.size() > 10) {
+            if (request.getFiles().size() > 10) {
                 return ResponseEntity.badRequest()
                         .body(ApiResponseDto.error("최대 10개까지 업로드 가능합니다."));
             }
 
-            // AWS S3에 파일 업로드
-            List<String> fileUrls = s3Service.uploadFiles(files);
+            // Presigned URL 생성
+            List<PresignedUrlDto> presignedUrls = request.getFiles().stream()
+                    .map(fileInfo -> s3Service.generatePresignedUrl(fileInfo.getFileName(), fileInfo.getContentType()))
+                    .collect(java.util.stream.Collectors.toList());
 
-            UploadFileResponseDto response = UploadFileResponseDto.builder()
-                    .fileUrls(fileUrls)
+            GetPresignedUrlsResponseDto response = GetPresignedUrlsResponseDto.builder()
+                    .presignedUrls(presignedUrls)
                     .build();
 
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (UnsupportedOperationException e) {
-            log.error("파일 업로드 실패: {}", e.getMessage());
+            log.error("Presigned URL 생성 실패: {}", e.getMessage());
             return ResponseEntity.badRequest()
-                    .body(ApiResponseDto.error("AWS S3 업로드 기능이 아직 구현되지 않았습니다."));
+                    .body(ApiResponseDto.error("AWS S3 Presigned URL 기능이 아직 구현되지 않았습니다."));
         } catch (Exception e) {
-            log.error("파일 업로드 중 오류 발생: ", e);
+            log.error("Presigned URL 생성 중 오류 발생: ", e);
             return ResponseEntity.badRequest()
-                    .body(ApiResponseDto.error("파일 업로드 중 오류가 발생했습니다."));
+                    .body(ApiResponseDto.error("Presigned URL 생성 중 오류가 발생했습니다."));
         }
     }
 
-    @PostMapping("/api/me/reviews/places/{placeId}")
+    @PostMapping("/api/places/{placeId}/reviews")
     @Operation(summary = "리뷰 작성", 
                description = "현재 로그인한 사용자가 특정 장소에 대한 리뷰를 작성합니다. 사진/영상은 AWS S3에 업로드된 URL을 photoUrls에 포함하여 전송합니다.")
     @ApiResponses(value = {
@@ -334,33 +333,27 @@ public class ReviewController {
     }
 
     @GetMapping("/api/me/reviews")
-    @Operation(summary = "내가 작성한 리뷰 목록 조회", 
-               description = "현재 로그인한 사용자가 작성한 리뷰 목록을 페이징하여 조회합니다.")
+    @Operation(summary = "내가 작성한 리뷰 목록 조회 (커서 기반 페이징)", 
+               description = "현재 로그인한 사용자가 작성한 리뷰 목록을 커서 기반으로 페이징하여 조회합니다. 마지막으로 조회한 리뷰 ID를 기준으로 다음 페이지를 가져옵니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    public ResponseEntity<ApiResponseDto<PageResponseDto<ReviewDto>>> getMyReviews(
+    public ResponseEntity<ApiResponseDto<CursorResponseDto<ReviewDto>>> getMyReviews(
             Authentication authentication,
-            @Parameter(description = "페이지 번호 (0부터 시작)", example = "0")
-            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "마지막으로 조회한 리뷰 ID (첫 조회시 생략)", example = "123")
+            @RequestParam(required = false) Long lastReviewId,
             @Parameter(description = "페이지 크기 (한 번에 조회할 개수)", example = "10")
             @RequestParam(defaultValue = "10") int size) {
 
         String username = authentication.getName();
-        log.info("내가 작성한 리뷰 목록 조회: username={}, page={}, size={}", username, page, size);
+        log.info("내가 작성한 리뷰 목록 조회 (커서): username={}, lastReviewId={}, size={}", username, lastReviewId, size);
 
         try {
             // username으로 User 조회
             User user = userRepository.findByUsername(username)
                     .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
-
-            // 페이지 번호 유효성 검증
-            if (page < 0) {
-                return ResponseEntity.badRequest()
-                        .body(ApiResponseDto.error("페이지 번호는 0 이상이어야 합니다."));
-            }
 
             // 페이지 크기 유효성 검증
             if (size <= 0 || size > 100) {
@@ -368,7 +361,7 @@ public class ReviewController {
                         .body(ApiResponseDto.error("페이지 크기는 1 이상 100 이하여야 합니다."));
             }
 
-            PageResponseDto<ReviewDto> response = reviewService.getMyReviews(user.getId(), page, size);
+            CursorResponseDto<ReviewDto> response = reviewService.getMyReviews(user.getId(), lastReviewId, size);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (RuntimeException e) {
             log.error("내가 작성한 리뷰 목록 조회 실패: {}", e.getMessage());

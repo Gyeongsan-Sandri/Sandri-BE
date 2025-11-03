@@ -10,6 +10,7 @@ import sandri.sandriweb.domain.magazine.dto.CreateMagazineRequestDto;
 import sandri.sandriweb.domain.magazine.dto.MagazineCardDto;
 import sandri.sandriweb.domain.magazine.dto.MagazineDetailResponseDto;
 import sandri.sandriweb.domain.magazine.dto.MagazineListDto;
+import sandri.sandriweb.domain.place.dto.CursorResponseDto;
 import sandri.sandriweb.domain.magazine.dto.UpdateMagazineRequestDto;
 import sandri.sandriweb.domain.magazine.entity.Magazine;
 import sandri.sandriweb.domain.magazine.entity.MagazineCard;
@@ -49,16 +50,16 @@ public class MagazineService {
         Magazine magazine = magazineRepository.findByIdWithCards(magazineId)
                 .orElseThrow(() -> new RuntimeException("매거진을 찾을 수 없습니다."));
 
-        // 2. MagazineCard를 DTO로 변환 (enabled된 카드만, createdAt 순으로 정렬)
+        // 2. MagazineCard를 DTO로 변환 (enabled된 카드만, order 순으로 정렬)
         List<MagazineCardDto> cardDtos = new ArrayList<>();
         if (magazine.getCards() != null && !magazine.getCards().isEmpty()) {
             cardDtos = magazine.getCards().stream()
                     .filter(BaseEntity::isEnabled) // enabled된 카드만 필터링
                     .sorted((c1, c2) -> {
-                        if (c1.getCreatedAt() == null && c2.getCreatedAt() == null) return 0;
-                        if (c1.getCreatedAt() == null) return 1;
-                        if (c2.getCreatedAt() == null) return -1;
-                        return c1.getCreatedAt().compareTo(c2.getCreatedAt()); // 오름차순 정렬
+                        if (c1.getOrder() == null && c2.getOrder() == null) return 0;
+                        if (c1.getOrder() == null) return 1;
+                        if (c2.getOrder() == null) return -1;
+                        return c1.getOrder().compareTo(c2.getOrder()); // order 오름차순 정렬
                     })
                     .map(this::convertToCardDto)
                     .collect(Collectors.toList());
@@ -79,16 +80,23 @@ public class MagazineService {
     }
 
     /**
-     * 매거진 목록 조회
-     * @param count 조회할 개수
+     * 매거진 목록 조회 (커서 기반 페이징)
+     * @param lastMagazineId 마지막으로 조회한 매거진 ID (첫 조회시 null)
+     * @param size 페이지 크기
      * @param userId 사용자 ID (로그인한 경우에만 제공, null 가능)
-     * @return 매거진 목록 (제목, 썸네일, 요약, 좋아요 여부)
+     * @return 커서 기반 페이징된 매거진 목록 (제목, 썸네일, 요약, 좋아요 여부)
      */
     @Transactional(readOnly = true)
-    public List<MagazineListDto> getMagazineList(int count, Long userId) {
-        // enabled된 매거진 조회 (최신순)
-        Pageable pageable = PageRequest.of(0, count);
-        List<Magazine> magazines = magazineRepository.findEnabledMagazinesOrderByCreatedAtDesc(pageable);
+    public CursorResponseDto<MagazineListDto> getMagazineList(Long lastMagazineId, int size, Long userId) {
+        // size + 1개를 가져와서 다음 페이지 존재 여부 확인
+        Pageable pageable = PageRequest.of(0, size + 1);
+        List<Magazine> allMagazines = magazineRepository.findEnabledMagazinesOrderByCreatedAtDescWithCursor(lastMagazineId, pageable);
+
+        // size + 1개를 확인하여 다음 페이지 존재 여부 판단
+        boolean hasNext = allMagazines.size() > size;
+        List<Magazine> magazines = hasNext
+                ? allMagazines.subList(0, size)
+                : allMagazines;
 
         // 각 매거진의 첫 번째 카드 조회를 위해 FETCH JOIN 필요
         List<Long> magazineIds = magazines.stream()
@@ -116,11 +124,17 @@ public class MagazineService {
         }
 
         // DTO 변환
-        return magazinesWithCards.stream()
+        List<MagazineListDto> magazineDtos = magazinesWithCards.stream()
                 .map(magazine -> {
-                    // 첫 번째 enabled된 카드 찾기
+                    // 첫 번째 enabled된 카드 찾기 (order 기준)
                     MagazineCard firstCard = magazine.getCards().stream()
-                            .filter(MagazineCard::isEnabled).min((c1, c2) -> c1.getCreatedAt().compareTo(c2.getCreatedAt()))
+                            .filter(MagazineCard::isEnabled)
+                            .min((c1, c2) -> {
+                                if (c1.getOrder() == null && c2.getOrder() == null) return 0;
+                                if (c1.getOrder() == null) return 1;
+                                if (c2.getOrder() == null) return -1;
+                                return c1.getOrder().compareTo(c2.getOrder());
+                            })
                             .orElse(null);
 
                     String thumbnail = firstCard != null ? firstCard.getCardUrl() : null;
@@ -137,6 +151,20 @@ public class MagazineService {
                             .build();
                 })
                 .collect(Collectors.toList());
+
+        // 마지막 매거진 ID 추출 (다음 커서)
+        Long nextCursor = null;
+        if (hasNext && !magazines.isEmpty()) {
+            nextCursor = magazines.get(magazines.size() - 1).getId();
+        }
+
+        // CursorResponseDto 생성
+        return CursorResponseDto.<MagazineListDto>builder()
+                .content(magazineDtos)
+                .size(size)
+                .nextCursor(nextCursor)
+                .hasNext(hasNext)
+                .build();
     }
 
     /**
@@ -187,26 +215,31 @@ public class MagazineService {
      */
     @Transactional
     public Long createMagazine(CreateMagazineRequestDto request) {
-        // 1. 매거진 생성
+        // 1. 매거진 생성 (enabled = true로 명시적 설정)
         Magazine magazine = Magazine.builder()
                 .name(request.getName())
                 .summary(request.getSummary())
                 .content(request.getContent())
+                .enabled(true) // 명시적으로 활성화
                 .build();
 
         Magazine savedMagazine = magazineRepository.save(magazine);
 
-        // 2. 매거진 카드 생성 (순서대로)
+        // 2. 매거진 카드 생성 (순서대로, 인덱스를 order로 사용)
         if (request.getCardUrls() != null && !request.getCardUrls().isEmpty()) {
             log.info("매거진 카드 생성 시작: magazineId={}, cardUrlsCount={}", 
                      savedMagazine.getId(), request.getCardUrls().size());
             
-            List<MagazineCard> cards = request.getCardUrls().stream()
-                    .map(cardUrl -> MagazineCard.builder()
-                            .magazine(savedMagazine)
-                            .cardUrl(cardUrl)
-                            .build())
-                    .collect(Collectors.toList());
+            List<MagazineCard> cards = new ArrayList<>();
+            for (int i = 0; i < request.getCardUrls().size(); i++) {
+                MagazineCard card = MagazineCard.builder()
+                        .magazine(savedMagazine)
+                        .cardUrl(request.getCardUrls().get(i))
+                        .order(i) // 인덱스를 order로 사용 (0부터 시작)
+                        .enabled(true) // 명시적으로 활성화
+                        .build();
+                cards.add(card);
+            }
 
             List<MagazineCard> savedCards = magazineCardRepository.saveAll(cards);
             log.info("매거진 카드 {}개 추가 완료: magazineId={}, savedCardsCount={}", 
@@ -250,14 +283,18 @@ public class MagazineService {
             log.info("기존 매거진 카드 {}개 삭제 완료: magazineId={}", existingCards.size(), magazineId);
         }
 
-        // 3. 새로운 카드 생성 (순서대로)
+        // 3. 새로운 카드 생성 (순서대로, 인덱스를 order로 사용)
         if (request.getCardUrls() != null && !request.getCardUrls().isEmpty()) {
-            List<MagazineCard> newCards = request.getCardUrls().stream()
-                    .map(cardUrl -> MagazineCard.builder()
-                            .magazine(updatedMagazine)
-                            .cardUrl(cardUrl)
-                            .build())
-                    .collect(Collectors.toList());
+            List<MagazineCard> newCards = new ArrayList<>();
+            for (int i = 0; i < request.getCardUrls().size(); i++) {
+                MagazineCard card = MagazineCard.builder()
+                        .magazine(updatedMagazine)
+                        .cardUrl(request.getCardUrls().get(i))
+                        .order(i) // 인덱스를 order로 사용 (0부터 시작)
+                        .enabled(true) // 명시적으로 활성화
+                        .build();
+                newCards.add(card);
+            }
 
             magazineCardRepository.saveAll(newCards);
             log.info("매거진 카드 {}개 추가 완료: magazineId={}", newCards.size(), magazineId);
@@ -277,6 +314,7 @@ public class MagazineService {
         return MagazineCardDto.builder()
                 .cardId(card.getId())
                 .cardUrl(card.getCardUrl())
+                .order(card.getOrder())
                 .build();
     }
 }

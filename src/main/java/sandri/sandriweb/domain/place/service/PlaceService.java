@@ -56,10 +56,7 @@ public class PlaceService {
         // 3. 평점 계산
         Double averageRating = reviewService.getAverageRating(placeId);
 
-        // 4. 근처 가볼만한 곳 조회 (기본: 관광지 3곳)
-        List<NearbyPlaceDto> nearbyPlaces = getNearbyPlaces(place, "관광지", 3);
-
-        // 5. DTO 생성 및 반환 (리뷰 정보 제외)
+        // 4. DTO 생성 및 반환 (리뷰, 근처 장소는 별도 API로 조회)
         return PlaceDetailResponseDto.builder()
                 .placeId(place.getId())
                 .name(place.getName())
@@ -74,9 +71,6 @@ public class PlaceService {
                 .summary(place.getSummery())
                 .information(place.getInformation())
                 .officialPhotos(officialPhotos)
-                .reviewPhotos(null) // 리뷰 사진은 별도 API로 조회
-                .reviews(null) // 리뷰 목록은 별도 API로 조회
-                .nearbyPlaces(nearbyPlaces)
                 .build();
     }
 
@@ -361,23 +355,24 @@ public class PlaceService {
 
     /**
      * 장소 사진 추가 (관리자용)
-     * @param request 장소 사진 생성 요청 DTO
+     * @param placeId 장소 ID
+     * @param photoUrl 사진 URL
      * @return 생성된 사진 ID
      */
     @Transactional
-    public Long createPlacePhoto(CreatePlacePhotoRequestDto request) {
+    public Long createPlacePhoto(Long placeId, String photoUrl) {
         // 장소 조회
-        Place place = placeRepository.findById(request.getPlaceId())
+        Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
 
         // PlacePhoto 생성
         PlacePhoto photo = PlacePhoto.builder()
                 .place(place)
-                .photoUrl(request.getPhotoUrl())
+                .photoUrl(photoUrl)
                 .build();
 
         PlacePhoto savedPhoto = placePhotoRepository.save(photo);
-        log.info("장소 사진 추가 완료: photoId={}, placeId={}", savedPhoto.getId(), request.getPlaceId());
+        log.info("장소 사진 추가 완료: photoId={}, placeId={}", savedPhoto.getId(), placeId);
 
         return savedPhoto.getId();
     }

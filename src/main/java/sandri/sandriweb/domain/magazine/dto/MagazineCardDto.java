@@ -12,5 +12,6 @@ import lombok.NoArgsConstructor;
 public class MagazineCardDto {
     private Long cardId;
     private String cardUrl; // 카드뉴스 이미지 URL
+    private Integer order; // 카드 순서
 }
 

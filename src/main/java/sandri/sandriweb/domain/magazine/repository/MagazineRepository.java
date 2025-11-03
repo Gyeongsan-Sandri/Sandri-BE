@@ -33,5 +33,21 @@ public interface MagazineRepository extends JpaRepository<Magazine, Long> {
            "WHERE m.enabled = true " +
            "ORDER BY m.createdAt DESC")
     List<Magazine> findEnabledMagazinesOrderByCreatedAtDesc(Pageable pageable);
+
+    /**
+     * enabled된 매거진 목록 조회 (커서 기반 페이징 - 최신순)
+     * @param lastMagazineId 마지막으로 조회한 매거진 ID (첫 조회시 null)
+     * @param pageable 페이징 정보
+     * @return 매거진 목록
+     */
+    @Query("SELECT DISTINCT m FROM Magazine m " +
+           "WHERE m.enabled = true " +
+           "AND (:lastMagazineId IS NULL OR " +
+           "     m.createdAt < (SELECT m2.createdAt FROM Magazine m2 WHERE m2.id = :lastMagazineId) OR " +
+           "     (m.createdAt = (SELECT m2.createdAt FROM Magazine m2 WHERE m2.id = :lastMagazineId) AND m.id < :lastMagazineId)) " +
+           "ORDER BY m.createdAt DESC, m.id DESC")
+    List<Magazine> findEnabledMagazinesOrderByCreatedAtDescWithCursor(
+            @Param("lastMagazineId") Long lastMagazineId,
+            Pageable pageable);
 }
 

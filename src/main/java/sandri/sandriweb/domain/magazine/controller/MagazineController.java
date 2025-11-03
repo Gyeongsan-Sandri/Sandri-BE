@@ -12,11 +12,10 @@ import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.magazine.dto.MagazineDetailResponseDto;
 import sandri.sandriweb.domain.magazine.dto.MagazineListDto;
 import sandri.sandriweb.domain.magazine.service.MagazineService;
+import sandri.sandriweb.domain.place.dto.CursorResponseDto;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/magazines")
@@ -56,20 +55,28 @@ public class MagazineController {
     }
 
     @GetMapping
-    @Operation(summary = "매거진 목록 조회",
-               description = "매거진 목록을 조회합니다. 제목, 썸네일(첫 번째 카드 이미지), 요약, 좋아요 여부를 반환합니다. 로그인한 경우 사용자가 좋아요한 매거진 여부도 함께 반환됩니다.")
+    @Operation(summary = "매거진 목록 조회 (커서 기반 페이징)",
+               description = "매거진 목록을 커서 기반으로 페이징하여 조회합니다. 제목, 썸네일(첫 번째 카드 이미지), 요약, 좋아요 여부를 반환합니다. 로그인한 경우 사용자가 좋아요한 매거진 여부도 함께 반환됩니다. 마지막으로 조회한 매거진 ID를 기준으로 다음 페이지를 가져옵니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    public ResponseEntity<ApiResponseDto<List<MagazineListDto>>> getMagazineList(
-            @Parameter(description = "조회할 개수", example = "10")
-            @RequestParam(defaultValue = "10") int count,
+    public ResponseEntity<ApiResponseDto<CursorResponseDto<MagazineListDto>>> getMagazineList(
+            @Parameter(description = "마지막으로 조회한 매거진 ID (첫 조회시 생략)", example = "123")
+            @RequestParam(required = false) Long lastMagazineId,
+            @Parameter(description = "페이지 크기 (한 번에 조회할 개수)", example = "10")
+            @RequestParam(defaultValue = "10") int size,
             Authentication authentication) {
 
-        log.info("매거진 목록 조회: count={}", count);
+        log.info("매거진 목록 조회 (커서): lastMagazineId={}, size={}", lastMagazineId, size);
 
         try {
+            // 페이지 크기 유효성 검증
+            if (size <= 0 || size > 100) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponseDto.error("페이지 크기는 1 이상 100 이하여야 합니다."));
+            }
+
             // 사용자 ID 조회 (로그인한 경우)
             Long userId = null;
             if (authentication != null && authentication.isAuthenticated()) {
@@ -84,7 +91,7 @@ public class MagazineController {
                 }
             }
 
-            List<MagazineListDto> response = magazineService.getMagazineList(count, userId);
+            CursorResponseDto<MagazineListDto> response = magazineService.getMagazineList(lastMagazineId, size, userId);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (Exception e) {
             log.error("매거진 목록 조회 중 오류 발생: ", e);

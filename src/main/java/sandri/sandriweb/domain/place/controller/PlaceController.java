@@ -33,7 +33,7 @@ public class PlaceController {
     @GetMapping("/{placeId}")
     @Operation(summary = "관광지 상세 정보 조회", 
                description = "관광지의 기본 정보를 조회합니다. 이름, 주소, 평점, 카테고리, 공식 사진, 근처 가볼만한 곳을 반환합니다. " +
-                           "리뷰 정보는 /api/reviews/places/{placeId} API를 별도로 호출하세요.")
+                           "리뷰 정보는 /api/places/{placeId}/reviews API를 별도로 호출하세요.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
@@ -210,6 +210,7 @@ public class PlaceController {
                     .body(ApiResponseDto.error("좋아요 처리 중 오류가 발생했습니다."));
         }
     }
+
 
 }
 

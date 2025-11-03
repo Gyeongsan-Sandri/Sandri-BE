@@ -20,6 +20,9 @@ public class MagazineCard extends BaseEntity {
 
     @Column(name = "card_url", nullable = false)
     private String cardUrl;
+
+    @Column(name = "`order`", nullable = false)
+    private Integer order; // 카드 순서 (0부터 시작)
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "magazine_id")
