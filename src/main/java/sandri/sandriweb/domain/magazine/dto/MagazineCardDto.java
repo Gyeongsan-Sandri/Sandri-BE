@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MagazineCardDto {
-    private Integer order; // 카드 순서 (0부터 시작)
+
     private String cardUrl; // 카드뉴스 이미지 URL
     private Integer order; // 카드 순서
 }

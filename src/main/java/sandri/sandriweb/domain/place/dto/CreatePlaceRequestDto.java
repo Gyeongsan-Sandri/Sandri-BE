@@ -26,10 +26,6 @@ public class CreatePlaceRequestDto {
     @NotNull(message = "경도는 필수입니다")
     private Double longitude;
 
-    private String phone;
-
-    private String webpage;
-
     private String summary;
 
     private String information;

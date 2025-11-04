@@ -1,10 +1,11 @@
-package sandri.sandriweb.domain.place.dto;
+package sandri.sandriweb.domain.review.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import sandri.sandriweb.domain.review.entity.PlaceReview;
+import sandri.sandriweb.domain.user.dto.UserProfileDto;
 
 import java.time.LocalDateTime;
 import java.util.List;

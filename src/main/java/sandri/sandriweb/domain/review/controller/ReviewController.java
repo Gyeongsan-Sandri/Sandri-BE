@@ -10,8 +10,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import sandri.sandriweb.domain.place.dto.CursorResponseDto;
-import sandri.sandriweb.domain.place.dto.ReviewDto;
+import sandri.sandriweb.domain.review.dto.PageResponseDto;
+import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.review.dto.CreateReviewRequestDto;
 import sandri.sandriweb.domain.review.dto.GetPresignedUrlsResponseDto;
 import sandri.sandriweb.domain.review.dto.PresignedUrlDto;
@@ -117,10 +119,9 @@ public class ReviewController {
         }
     }
 
-    @PostMapping("/api/me/reviews/files/presigned")
-    @Operation(summary = "리뷰 사진/영상 업로드용 Presigned URL 발급", 
-               description = "프론트엔드가 직접 S3에 파일을 업로드할 수 있도록 Presigned URL을 발급합니다. " +
-                           "발급받은 Presigned URL로 PUT 요청을 보내 파일을 업로드하고, 반환된 finalUrl을 리뷰 작성 시 photoUrls에 포함하세요.")
+    @PostMapping("/me/files")
+    @Operation(summary = "리뷰 사진/영상 업로드", 
+               description = "리뷰에 첨부할 사진/영상을 AWS S3에 업로드합니다. 업로드된 URL을 반환합니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Presigned URL 발급 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
@@ -168,7 +169,7 @@ public class ReviewController {
         }
     }
 
-    @PostMapping("/api/places/{placeId}/reviews")
+    @PostMapping("/me/places/{placeId}")
     @Operation(summary = "리뷰 작성", 
                description = "현재 로그인한 사용자가 특정 장소에 대한 리뷰를 작성합니다. 사진/영상은 AWS S3에 업로드된 URL을 photoUrls에 포함하여 전송합니다.")
     @ApiResponses(value = {

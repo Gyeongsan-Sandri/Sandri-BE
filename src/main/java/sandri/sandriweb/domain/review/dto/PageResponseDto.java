@@ -1,4 +1,4 @@
-package sandri.sandriweb.domain.place.dto;
+package sandri.sandriweb.domain.review.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sandri.sandriweb.domain.place.dto.*;
@@ -38,7 +40,7 @@ public class PlaceService {
     
     private static final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
-    /**
+    /*
      * 관광지 상세 정보 조회 (기본 정보만, 리뷰 제외)
      * @param placeId 관광지 ID
      * @return PlaceDetailResponseDto (리뷰 정보 제외)
@@ -48,15 +50,18 @@ public class PlaceService {
         Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new RuntimeException("관광지를 찾을 수 없습니다."));
 
-        // 2. 공식 사진 조회
-        List<String> officialPhotos = placePhotoRepository.findByPlaceId(placeId).stream()
-                .map(PlacePhoto::getPhotoUrl)
+        // 2. 공식 사진 조회 (order 순서대로)
+        List<PlaceDetailResponseDto.PhotoDto> officialPhotos = placePhotoRepository.findByPlaceId(placeId).stream()
+                .map(photo -> PlaceDetailResponseDto.PhotoDto.builder()
+                        .order(photo.getOrder())
+                        .photoUrl(photo.getPhotoUrl())
+                        .build())
                 .collect(Collectors.toList());
 
         // 3. 평점 계산
         Double averageRating = reviewService.getAverageRating(placeId);
 
-        // 4. DTO 생성 및 반환 (리뷰, 근처 장소는 별도 API로 조회)
+        // 4. DTO 생성 및 반환 (리뷰 정보 및 근처 장소는 별도 API로 조회)
         return PlaceDetailResponseDto.builder()
                 .placeId(place.getId())
                 .name(place.getName())
@@ -66,8 +71,6 @@ public class PlaceService {
                 .rating(averageRating)
                 .latitude(place.getLatitude())
                 .longitude(place.getLongitude())
-                .phone(place.getPhone())
-                .webpage(place.getWebpage())
                 .summary(place.getSummery())
                 .information(place.getInformation())
                 .officialPhotos(officialPhotos)
@@ -75,17 +78,28 @@ public class PlaceService {
     }
 
     /**
-     * 근처 가볼만한 곳 조회 (카테고리별)
-     * @param place 기준 관광지
+     * Place ID로 근처 가볼만한 곳 조회 (카테고리별)
+     * @param placeId 기준 관광지 ID
      * @param categoryName 카테고리 이름 (관광지/맛집/카페)
      * @param limit 조회할 개수
      * @return 근처 관광지 리스트
      */
-    public List<NearbyPlaceDto> getNearbyPlaces(Place place, String categoryName, int limit) {
-        // 5km 반경 (미터 단위)
+    public List<NearbyPlaceDto> getNearbyPlacesByPlaceId(Long placeId, String categoryName, int limit) {
+        // 1. 카테고리 검증
+        try {
+            PlaceCategory.valueOf(categoryName);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("카테고리는 '관광지', '맛집', '카페' 중 하나여야 합니다.");
+        }
+        
+        // 2. 기준 장소 조회
+        Place place = placeRepository.findById(placeId)
+                .orElseThrow(() -> new RuntimeException("관광지를 찾을 수 없습니다."));
+        
+        // 3. 5km 반경 (미터 단위)
         double radius = 5000.0;
         
-        // 카테고리별 근처 장소 조회
+        // 4. 카테고리별 근처 장소 조회
         List<Place> nearbyPlaces = placeRepository.findNearbyPlacesByCategory(
                 place.getLocation(),
                 radius,
@@ -98,50 +112,141 @@ public class PlaceService {
             return List.of();
         }
         
-        // 근처 장소들의 ID 추출
+        // 4. 사진 조회 및 매핑 (공통 헬퍼 메서드 사용)
         List<Long> nearbyPlaceIds = nearbyPlaces.stream()
                 .map(Place::getId)
                 .collect(Collectors.toList());
+        Map<Long, String> photoUrlByPlaceId = getPhotoUrlByPlaceIds(nearbyPlaceIds);
         
-        // 근처 장소들을 다시 조회 (효율적인 로딩)
-        List<Place> placesWithCategory = nearbyPlaceIds.stream()
-                .map(id -> placeRepository.findById(id))
-                .filter(java.util.Optional::isPresent)
-                .map(java.util.Optional::get)
-                .collect(Collectors.toList());
-        
-        // 사진 효율적으로 로딩 (각 장소당 첫 번째 사진만)
-        List<PlacePhoto> firstPhotos = placePhotoRepository.findFirstPhotoByPlaceIdIn(nearbyPlaceIds);
-        
-        // Place ID별로 사진 매핑 (각 장소당 한 장씩)
-        java.util.Map<Long, String> photoUrlByPlaceId = firstPhotos.stream()
-                .collect(Collectors.toMap(
-                        photo -> photo.getPlace().getId(),
-                        PlacePhoto::getPhotoUrl
-                ));
-        
-        // 기준 장소의 위치
+        // 5. 기준 장소의 위치
         Point centerLocation = place.getLocation();
         
-        return placesWithCategory.stream()
+        // 6. DTO 변환
+        return nearbyPlaces.stream()
                 .map(nearbyPlace -> {
-                    // 사진 URL 추출 (각 장소당 한 장씩)
                     String thumbnailUrl = photoUrlByPlaceId.get(nearbyPlace.getId());
-                    
-                    // 거리 계산 (미터 단위)
                     Long distance = calculateDistanceInMeters(centerLocation, nearbyPlace.getLocation());
                     
                     return NearbyPlaceDto.builder()
                             .name(nearbyPlace.getName())
                             .thumbnailUrl(thumbnailUrl)
                             .distanceInMeters(distance)
-                            .categoryName(nearbyPlace.getCategory() != null ? nearbyPlace.getCategory().getDisplayName() : null) // 세부 카테고리
+                            .categoryName(nearbyPlace.getCategory() != null ? nearbyPlace.getCategory().getDisplayName() : null)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Place ID로 근처 가볼만한 곳 조회 (카테고리 필터 없음)
+     * @param placeId 기준 관광지 ID
+     * @param limit 조회할 개수
+     * @return 근처 관광지 리스트
+     */
+    public List<NearbyPlaceDto> getNearbyPlaces(Long placeId, int limit) {
+        // 1. 기준 장소 조회
+        Place place = placeRepository.findById(placeId)
+                .orElseThrow(() -> new RuntimeException("관광지를 찾을 수 없습니다."));
+        
+        // 2. 5km 반경 (미터 단위)
+        double radius = 5000.0;
+        
+        // 3. 근처 장소 조회 (카테고리 필터 없음)
+        List<Place> nearbyPlaces = placeRepository.findNearbyPlaces(
+                place.getLocation(),
+                radius,
+                place.getId(),
+                limit
+        );
+        
+        if (nearbyPlaces.isEmpty()) {
+            return List.of();
+        }
+        
+        // 4. 사진 조회 및 매핑 (공통 헬퍼 메서드 사용)
+        List<Long> nearbyPlaceIds = nearbyPlaces.stream()
+                .map(Place::getId)
+                .collect(Collectors.toList());
+        Map<Long, String> photoUrlByPlaceId = getPhotoUrlByPlaceIds(nearbyPlaceIds);
+        
+        // 5. 기준 장소의 위치
+        Point centerLocation = place.getLocation();
+        
+        // 6. DTO 변환
+        return nearbyPlaces.stream()
+                .map(nearbyPlace -> {
+                    String thumbnailUrl = photoUrlByPlaceId.get(nearbyPlace.getId());
+                    Long distance = calculateDistanceInMeters(centerLocation, nearbyPlace.getLocation());
+                    
+                    return NearbyPlaceDto.builder()
+                            .name(nearbyPlace.getName())
+                            .thumbnailUrl(thumbnailUrl)
+                            .distanceInMeters(distance)
+                            .categoryName(nearbyPlace.getCategory() != null ? nearbyPlace.getCategory().getDisplayName() : null)
                             .build();
                 })
                 .collect(Collectors.toList());
     }
     
     /**
+     * 여러 장소의 첫 번째 사진 URL을 조회하여 Place ID별로 매핑
+     * N+1 문제 방지를 위해 배치 조회 사용
+     * @param placeIds 장소 ID 목록
+     * @return Place ID를 키로, 사진 URL을 값으로 하는 Map
+     */
+    private Map<Long, String> getPhotoUrlByPlaceIds(List<Long> placeIds) {
+        if (placeIds == null || placeIds.isEmpty()) {
+            return new java.util.HashMap<>();
+        }
+        
+        // 배치 조회로 각 장소당 첫 번째 사진만 조회 (N+1 문제 방지)
+        List<Object[]> photoResults = placePhotoRepository.findFirstPhotoUrlByPlaceIdIn(placeIds);
+        
+        return photoResults.stream()
+                .collect(Collectors.toMap(
+                        result -> ((Number) result[0]).longValue(), // place_id
+                        result -> (String) result[1]  // photo_url
+                ));
+    }
+    
+    /**
+     * 장소 사진 목록 조회 (커서 기반 페이징)
+     * @param lastPlaceId 마지막으로 조회한 place_id (첫 조회시 null)
+     * @param size 페이지 크기
+     * @return 커서 기반 페이징된 장소 사진 목록
+     */
+    @Transactional(readOnly = true)
+    public PlacePhotoCursorResponseDto getPlacePhotosByCursor(Long lastPlaceId, int size) {
+        // size + 1개 조회하여 다음 페이지 여부 판단
+        Pageable pageable = PageRequest.of(0, size + 1);
+        List<Object[]> allPhotos = placePhotoRepository.findFirstPhotoUrlByPlaceIdWithCursor(lastPlaceId, pageable);
+        
+        boolean hasNext = allPhotos.size() > size;
+        List<Object[]> pageItems = hasNext ? allPhotos.subList(0, size) : allPhotos;
+        
+        // DTO 변환
+        List<PlacePhotoCursorResponseDto.PlacePhotoDto> photoDtos = pageItems.stream()
+                .map(result -> PlacePhotoCursorResponseDto.PlacePhotoDto.builder()
+                        .placeId(((Number) result[0]).longValue())
+                        .photoUrl((String) result[1])
+                        .build())
+                .collect(Collectors.toList());
+        
+        // 다음 커서 설정
+        Long nextCursor = null;
+        if (hasNext && !pageItems.isEmpty()) {
+            nextCursor = ((Number) pageItems.get(pageItems.size() - 1)[0]).longValue();
+        }
+        
+        return PlacePhotoCursorResponseDto.builder()
+                .photos(photoDtos)
+                .size(size)
+                .nextCursor(nextCursor)
+                .hasNext(hasNext)
+                .build();
+    }
+    
+    /*
      * 두 지점 간의 거리 계산 (Haversine 공식, 미터 단위)
      * @param point1 첫 번째 지점
      * @param point2 두 번째 지점
@@ -177,19 +282,6 @@ public class PlaceService {
     }
 
     /**
-     * Place ID로 근처 가볼만한 곳 조회
-     * @param placeId 기준 관광지 ID
-     * @param categoryName 카테고리 이름
-     * @param limit 조회할 개수
-     * @return 근처 관광지 리스트
-     */
-    public List<NearbyPlaceDto> getNearbyPlacesByPlaceId(Long placeId, String categoryName, int limit) {
-        Place place = placeRepository.findById(placeId)
-                .orElseThrow(() -> new RuntimeException("관광지를 찾을 수 없습니다."));
-        return getNearbyPlaces(place, categoryName, limit);
-    }
-
-    /**
      * 카테고리별 장소 조회 (좋아요 많은 순)
      * @param categoryDisplayName 카테고리 표시 이름 ('자연/힐링', '역사/전통', '문화/체험', '식도락')
      * @param count 조회할 개수
@@ -216,15 +308,10 @@ public class PlaceService {
                 .map(Place::getId)
                 .collect(Collectors.toList());
 
-        // 사진 효율적으로 로딩 (각 장소당 첫 번째 사진만)
-        List<PlacePhoto> firstPhotos = placePhotoRepository.findFirstPhotoByPlaceIdIn(placeIds);
-        Map<Long, String> photoUrlByPlaceId = firstPhotos.stream()
-                .collect(Collectors.toMap(
-                        photo -> photo.getPlace().getId(),
-                        PlacePhoto::getPhotoUrl
-                ));
+        // 사진 조회 및 매핑 (공통 헬퍼 메서드 사용)
+        Map<Long, String> photoUrlByPlaceId = getPhotoUrlByPlaceIds(placeIds);
 
-        // 좋아요 수 계산 (효율적으로)
+        // 좋아요 수 계산
         Map<Long, Long> likeCountByPlaceId = userPlaceRepository.countLikesByPlaceIds(placeIds).stream()
                 .collect(Collectors.toMap(
                         result -> (Long) result[0],
@@ -244,12 +331,8 @@ public class PlaceService {
             likedPlaceIds = new java.util.HashMap<>();
         }
 
-        // 평점 계산
-        Map<Long, Double> ratingByPlaceId = places.stream()
-                .collect(Collectors.toMap(
-                        Place::getId,
-                        place -> reviewService.getAverageRating(place.getId())
-                ));
+        // 평점 계산 (배치 조회로 N+1 문제 해결)
+        Map<Long, Double> ratingByPlaceId = reviewService.getAverageRatingsByPlaceIds(placeIds);
 
         // DTO 변환
         return places.stream()
@@ -289,13 +372,15 @@ public class PlaceService {
      */
     @Transactional
     public boolean toggleLike(Long placeId, Long userId) {
-        // 장소 존재 확인
-        Place place = placeRepository.findById(placeId)
-                .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
+        // 장소 존재 확인 (exists로 최적화)
+        if (!placeRepository.existsById(placeId)) {
+            throw new RuntimeException("장소를 찾을 수 없습니다.");
+        }
         
-        // 사용자 존재 확인
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
+        // 사용자 존재 확인 (exists로 최적화)
+        if (!userRepository.existsById(userId)) {
+            throw new RuntimeException("사용자를 찾을 수 없습니다.");
+        }
         
         // 기존 좋아요 조회
         return userPlaceRepository.findByUserIdAndPlaceId(userId, placeId)
@@ -312,7 +397,9 @@ public class PlaceService {
                     }
                 })
                 .orElseGet(() -> {
-                    // 좋아요가 없는 경우: 새로 생성
+                    // 좋아요가 없는 경우: 새로 생성 (User와 Place는 프록시로 로드)
+                    User user = userRepository.getReferenceById(userId);
+                    Place place = placeRepository.getReferenceById(placeId);
                     UserPlace newUserPlace = UserPlace.builder()
                             .user(user)
                             .place(place)
@@ -339,8 +426,6 @@ public class PlaceService {
                 .name(request.getName())
                 .address(request.getAddress())
                 .location(location)
-                .phone(request.getPhone())
-                .webpage(request.getWebpage())
                 .summery(request.getSummary())
                 .information(request.getInformation())
                 .group(request.getGroup())
@@ -365,14 +450,20 @@ public class PlaceService {
         Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
 
+        // 최대 order 값 조회 (새 사진의 order = MAX(order) + 1)
+        Integer maxOrder = placePhotoRepository.findMaxOrderByPlaceId(placeId);
+        int nextOrder = (maxOrder == null || maxOrder == -1) ? 0 : maxOrder + 1;
+
         // PlacePhoto 생성
         PlacePhoto photo = PlacePhoto.builder()
                 .place(place)
                 .photoUrl(photoUrl)
+                .order(nextOrder)
                 .build();
 
         PlacePhoto savedPhoto = placePhotoRepository.save(photo);
-        log.info("장소 사진 추가 완료: photoId={}, placeId={}", savedPhoto.getId(), placeId);
+        log.info("장소 사진 추가 완료: photoId={}, placeId={}, order={}", 
+                 savedPhoto.getId(), placeId, savedPhoto.getOrder());
 
         return savedPhoto.getId();
     }

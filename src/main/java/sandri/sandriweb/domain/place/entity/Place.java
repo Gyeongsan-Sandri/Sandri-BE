@@ -34,12 +34,6 @@ public class Place extends BaseEntity {
     @Column(name = "location", nullable = false)
     private Point location;
 
-    @Column(name = "phone", length = 12)
-    private String phone;
-
-    @Column(name = "webpage")
-    private String webpage;
-
     @Column(name = "summery")
     private String summery;
 
