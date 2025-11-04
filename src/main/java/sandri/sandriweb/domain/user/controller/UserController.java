@@ -3,12 +3,14 @@ package sandri.sandriweb.domain.user.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
+import sandri.sandriweb.domain.user.dto.SaveTravelStyleRequestDto;
 import sandri.sandriweb.domain.user.dto.UserResponseDto;
 import sandri.sandriweb.domain.user.service.UserService;
 
@@ -57,6 +59,28 @@ public class UserController {
             return ResponseEntity.ok(response);
         } else {
             return ResponseEntity.notFound().build();
+        }
+    }
+    
+    @PostMapping("/travel-style")
+    @Operation(summary = "여행 스타일 저장", description = "현재 로그인한 사용자의 여행 스타일을 저장합니다")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "저장 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요")
+    })
+    public ResponseEntity<ApiResponseDto<UserResponseDto>> saveTravelStyle(
+            @Valid @RequestBody SaveTravelStyleRequestDto request,
+            Authentication authentication) {
+        
+        String username = authentication.getName();
+        log.info("여행 스타일 저장 요청: 사용자={}, 여행스타일={}", username, request.getTravelStyle());
+        ApiResponseDto<UserResponseDto> response = userService.saveTravelStyle(username, request);
+        
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.badRequest().body(response);
         }
     }
 }

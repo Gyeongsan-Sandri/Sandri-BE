@@ -94,4 +94,22 @@ public class UserService {
             return ApiResponseDto.error(e.getMessage());
         }
     }
+    
+    @Transactional
+    public ApiResponseDto<UserResponseDto> saveTravelStyle(String username, SaveTravelStyleRequestDto request) {
+        try {
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+            
+            user.updateTravelStyle(request.getTravelStyle());
+            User savedUser = userRepository.save(user);
+            
+            UserResponseDto userDto = UserResponseDto.from(savedUser);
+            return ApiResponseDto.success("여행 스타일이 저장되었습니다", userDto);
+            
+        } catch (Exception e) {
+            log.error("여행 스타일 저장 실패: {}", e.getMessage());
+            return ApiResponseDto.error(e.getMessage());
+        }
+    }
 }
