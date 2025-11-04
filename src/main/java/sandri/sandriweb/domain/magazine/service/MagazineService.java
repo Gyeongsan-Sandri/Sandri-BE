@@ -72,7 +72,7 @@ public class MagazineService {
      * @param lastMagazineId 마지막으로 조회한 매거진 ID (첫 조회시 null)
      * @param size 페이지 크기
      * @param userId 사용자 ID (로그인한 경우에만 제공, null 가능)
-     * @return 매거진 목록 (제목, 썸네일, 요약, 좋아요 여부)
+     * @return 커서 기반 페이징된 매거진 목록 (제목, 썸네일, 요약, 좋아요 여부)
      */
     @Transactional(readOnly = true)
     public MagazineListCursorResponseDto getMagazineListByCursor(Long lastMagazineId, int size, Long userId) {
@@ -208,11 +208,12 @@ public class MagazineService {
      */
     @Transactional
     public Long createMagazine(CreateMagazineRequestDto request) {
-        // 1. 매거진 생성
+        // 1. 매거진 생성 (enabled = true로 명시적 설정)
         Magazine magazine = Magazine.builder()
                 .name(request.getName())
                 .summary(request.getSummary())
                 .content(request.getContent())
+                .enabled(true) // 명시적으로 활성화
                 .build();
 
         Magazine savedMagazine = magazineRepository.save(magazine);
@@ -271,6 +272,7 @@ public class MagazineService {
         return MagazineCardDto.builder()
                 .order(card.getOrder())
                 .cardUrl(card.getCardUrl())
+                .order(card.getOrder())
                 .build();
     }
 }

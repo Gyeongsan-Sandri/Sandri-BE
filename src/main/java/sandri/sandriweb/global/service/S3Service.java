@@ -10,18 +10,26 @@ import java.util.List;
  */
 public interface S3Service {
     /**
-     * 단일 파일을 S3에 업로드
+     * 단일 파일을 S3에 업로드 (백엔드를 통한 업로드)
      * @param file 업로드할 파일
      * @return 업로드된 파일의 URL
      */
     String uploadFile(MultipartFile file);
 
     /**
-     * 여러 파일을 S3에 업로드
+     * 여러 파일을 S3에 업로드 (백엔드를 통한 업로드)
      * @param files 업로드할 파일 리스트
      * @return 업로드된 파일들의 URL 리스트
      */
     List<String> uploadFiles(List<MultipartFile> files);
+
+    /**
+     * Presigned URL 생성 (프론트엔드가 직접 S3에 업로드하기 위한 URL)
+     * @param fileName 파일명 (S3 키)
+     * @param contentType 파일 타입 (예: image/jpeg, image/png, video/mp4)
+     * @return PresignedUrlDto (presignedUrl과 finalUrl 포함)
+     */
+    sandri.sandriweb.domain.review.dto.PresignedUrlDto generatePresignedUrl(String fileName, String contentType);
 
     /**
      * S3에서 파일 삭제
