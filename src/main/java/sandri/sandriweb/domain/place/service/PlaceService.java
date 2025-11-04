@@ -451,19 +451,19 @@ public class PlaceService {
                 .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
 
         // 최대 order 값 조회 (새 사진의 order = MAX(order) + 1)
-        Integer maxOrder = placePhotoRepository.findMaxOrderByPlaceId(request.getPlaceId());
+        Integer maxOrder = placePhotoRepository.findMaxOrderByPlaceId(placeId);
         int nextOrder = (maxOrder == null || maxOrder == -1) ? 0 : maxOrder + 1;
 
         // PlacePhoto 생성
         PlacePhoto photo = PlacePhoto.builder()
                 .place(place)
-                .photoUrl(request.getPhotoUrl())
+                .photoUrl(photoUrl)
                 .order(nextOrder)
                 .build();
 
         PlacePhoto savedPhoto = placePhotoRepository.save(photo);
         log.info("장소 사진 추가 완료: photoId={}, placeId={}, order={}", 
-                 savedPhoto.getId(), request.getPlaceId(), savedPhoto.getOrder());
+                 savedPhoto.getId(), placeId, savedPhoto.getOrder());
 
         return savedPhoto.getId();
     }

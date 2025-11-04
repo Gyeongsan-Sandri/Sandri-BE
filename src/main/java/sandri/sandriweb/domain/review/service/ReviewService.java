@@ -7,6 +7,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import sandri.sandriweb.domain.place.dto.CursorResponseDto;
 import sandri.sandriweb.domain.review.dto.PageResponseDto;
 import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.place.entity.Place;
@@ -25,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -333,7 +335,7 @@ public class ReviewService {
                 : allItems;
 
         // DTO 변환
-        List<D> content = items.stream()
+        List<D> content = (List<D>) items.stream()
                 .map(mapper)
                 .collect(Collectors.toList());
 
