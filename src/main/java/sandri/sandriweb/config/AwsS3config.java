@@ -1,12 +1,18 @@
 package sandri.sandriweb.config;
-
-import lombok.extern.slf4j.Slf4j;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
+import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Configuration
-public class AwsS3Config {
-    @Value("${cloud.aws.credentials.access-key}") // application.yml 에 명시한 내용
+public class AwsS3config {
+
+    @Value("${cloud.aws.credentials.access-key}")
     private String accessKey;
 
     @Value("${cloud.aws.credentials.secret-key}")
