@@ -22,6 +22,15 @@ public class PlaceDetailResponseDto {
     private Double longitude;
     private String summary;
     private String information;
-    private List<String> officialPhotos; // 공식 사진들
+    private List<PhotoDto> officialPhotos; // 공식 사진들 (순서 포함)
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PhotoDto {
+        private Integer order; // 사진 순서 (0부터 시작)
+        private String photoUrl; // 사진 URL
+    }
 }
 

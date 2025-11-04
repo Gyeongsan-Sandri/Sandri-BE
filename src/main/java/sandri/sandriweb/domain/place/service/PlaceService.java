@@ -50,9 +50,12 @@ public class PlaceService {
         Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new RuntimeException("관광지를 찾을 수 없습니다."));
 
-        // 2. 공식 사진 조회
-        List<String> officialPhotos = placePhotoRepository.findByPlaceId(placeId).stream()
-                .map(PlacePhoto::getPhotoUrl)
+        // 2. 공식 사진 조회 (order 순서대로)
+        List<PlaceDetailResponseDto.PhotoDto> officialPhotos = placePhotoRepository.findByPlaceId(placeId).stream()
+                .map(photo -> PlaceDetailResponseDto.PhotoDto.builder()
+                        .order(photo.getOrder())
+                        .photoUrl(photo.getPhotoUrl())
+                        .build())
                 .collect(Collectors.toList());
 
         // 3. 평점 계산
