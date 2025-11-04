@@ -20,6 +20,9 @@ public class PlacePhoto extends BaseEntity {
 
     @Column(name = "photo_url", nullable = false)
     private String photoUrl;
+    
+    @Column(name = "`order`", nullable = false)
+    private Integer order; // 사진 순서 (0부터 시작)
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "place_id")
