@@ -16,4 +16,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
     
     boolean existsByNickname(String nickname);
+    
+    /**
+     * username으로 userId만 조회 (성능 최적화용)
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT u.id FROM User u WHERE u.username = :username")
+    Optional<Long> findUserIdByUsername(@org.springframework.data.repository.query.Param("username") String username);
 }

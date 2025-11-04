@@ -18,6 +18,9 @@ public class MagazineCard extends BaseEntity {
     @Column(name = "magazine_card_id")
     private Long id;
 
+    @Column(name = "`order`", nullable = false)
+    private Integer order; // 카드 순서 (0부터 시작)
+    
     @Column(name = "card_url", nullable = false)
     private String cardUrl;
     
