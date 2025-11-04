@@ -34,12 +34,40 @@ GET http://localhost:8080/api/places/1
 - 장소의 기본 정보만 반환합니다 (리뷰 정보 제외)
 - 리뷰 정보가 필요하면 `/api/places/{placeId}/reviews` API를 별도로 호출하세요
 - 리뷰 사진이 필요하면 `/api/places/{placeId}/reviews/photos` API를 별도로 호출하세요
+- 근처 가볼만한 곳이 필요하면 `/api/places/{placeId}/nearby` API를 별도로 호출하세요
 
 **반환 정보:**
-- 장소 기본 정보 (이름, 주소, 좌표, 전화번호 등)
+- 장소 기본 정보 (이름, 주소, 좌표)
 - 평점 (rating)
-- 공식 사진들
-- 근처 가볼만한 곳
+- 대분류 (groupName: 관광지/맛집/카페)
+- 세부 카테고리 (categoryName: 자연/힐링, 역사/전통, 문화/체험, 식도락)
+- 공식 사진들 (officialPhotos)
+- 요약 (summary)
+- 상세 정보 (information)
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": {
+    "placeId": 1,
+    "name": "경주 불국사",
+    "groupName": "관광지",
+    "categoryName": "역사/전통",
+    "rating": 4.5,
+    "address": "경상북도 경주시 불국로 385",
+    "latitude": 35.7894,
+    "longitude": 129.3320,
+    "summary": "신라 불교 문화의 정수를 보여주는 사찰",
+    "information": "불국사는 신라 경덕왕 10년(751)에 김대성이 창건을 시작하여...",
+    "officialPhotos": [
+      "https://s3.../photo1.jpg",
+      "https://s3.../photo2.jpg"
+    ]
+  }
+}
+```
 
 **프론트엔드 사용 예시:**
 ```javascript
@@ -47,20 +75,24 @@ GET http://localhost:8080/api/places/1
 const placeResponse = await fetch('http://localhost:8080/api/places/1');
 const placeData = await placeResponse.json();
 
-// 2. 리뷰 목록 조회 (필요한 경우) - 커서 기반 페이징
+// 2. 근처 가볼만한 곳 조회 (필요한 경우)
+const nearbyResponse = await fetch('http://localhost:8080/api/places/1/nearby?category=맛집&count=3');
+const nearbyData = await nearbyResponse.json();
+
+// 3. 리뷰 목록 조회 (필요한 경우) - 커서 기반 페이징
 const reviewsResponse = await fetch('http://localhost:8080/api/places/1/reviews?size=10&sort=latest');
 const reviewsData = await reviewsResponse.json();
 // 다음 페이지: reviewsData.data.nextCursor가 있으면
 // const nextPageResponse = await fetch(`http://localhost:8080/api/places/1/reviews?lastReviewId=${reviewsData.data.nextCursor}&size=10&sort=latest`);
 
-// 3. 리뷰 사진 조회 (필요한 경우) - 커서 기반 페이징
+// 4. 리뷰 사진 조회 (필요한 경우) - 커서 기반 페이징
 const photosResponse = await fetch('http://localhost:8080/api/places/1/reviews/photos?size=20');
 const photosData = await photosResponse.json();
 // 다음 페이지: photosData.data.nextCursor가 있으면
 // const nextPhotosResponse = await fetch(`http://localhost:8080/api/places/1/reviews/photos?lastPhotoId=${photosData.data.nextCursor}&size=20`);
 ```
 
-### 2.2 근처 장소 조회
+### 2.2 근처 장소 조회 (카테고리별)
 ```
 GET http://localhost:8080/api/places/1/nearby?category=관광지&count=3
 ```
@@ -69,7 +101,57 @@ GET http://localhost:8080/api/places/1/nearby?category=관광지&count=3
 - `category` (required): 카테고리 (관광지, 맛집, 카페)
 - `count` (optional, default: 3): 조회할 개수
 
-### 2.3 카테고리별 장소 조회
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "name": "경주 석굴암",
+      "thumbnailUrl": "https://s3.../photo.jpg",
+      "distanceInMeters": 2500,
+      "categoryName": "역사/전통"
+    }
+  ]
+}
+```
+
+### 2.3 근처 장소 조회 (전체)
+```
+GET http://localhost:8080/api/places/1/nearby/all?count=10
+```
+
+**Query Parameters:**
+- `count` (optional, default: 10): 조회할 개수
+
+**설명:**
+- 카테고리 필터 없이 거리순으로 정렬된 근처 장소 목록을 반환합니다.
+- 모든 카테고리(관광지, 맛집, 카페)를 포함합니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "name": "경주 석굴암",
+      "thumbnailUrl": "https://s3.../photo.jpg",
+      "distanceInMeters": 2500,
+      "categoryName": "역사/전통"
+    },
+    {
+      "name": "경주 맛집",
+      "thumbnailUrl": "https://s3.../photo.jpg",
+      "distanceInMeters": 3200,
+      "categoryName": "식도락"
+    }
+  ]
+}
+```
+
+### 2.4 카테고리별 장소 조회
 ```
 GET http://localhost:8080/api/places/category?category=자연/힐링&count=10
 ```
@@ -80,7 +162,69 @@ GET http://localhost:8080/api/places/category?category=자연/힐링&count=10
 
 **참고**: 로그인한 경우 자동으로 `isLiked` 정보 포함
 
-### 2.4 장소 좋아요 토글
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "placeId": 1,
+      "name": "경주 불국사",
+      "address": "경상북도 경주시 불국로 385",
+      "thumbnailUrl": "https://s3.../photo.jpg",
+      "rating": 4.5,
+      "likeCount": 120,
+      "isLiked": true,
+      "groupName": "관광지",
+      "categoryName": "역사/전통"
+    }
+  ]
+}
+```
+
+### 2.5 장소 사진 목록 조회 (커서 페이징)
+```
+GET http://localhost:8080/api/places/photos?size=10
+```
+
+**Query Parameters:**
+- `lastPlaceId` (optional): 마지막으로 조회한 place_id (첫 조회시 생략, 다음 페이지 조회시 사용)
+- `size` (optional, default: 10): 페이지 크기 (한 번에 조회할 개수)
+
+**설명:**
+- 모든 장소의 첫 번째 사진을 커서 기반 페이징으로 조회합니다.
+- place_id를 커서로 사용하여 배치 처리합니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": {
+    "photos": [
+      {
+        "placeId": 1,
+        "photoUrl": "https://s3.../photo1.jpg"
+      },
+      {
+        "placeId": 2,
+        "photoUrl": "https://s3.../photo2.jpg"
+      }
+    ],
+    "size": 10,
+    "nextCursor": 15,
+    "hasNext": true
+  }
+}
+```
+
+**다음 페이지 조회:**
+```
+GET http://localhost:8080/api/places/photos?lastPlaceId=15&size=10
+```
+
+### 2.6 장소 좋아요 토글
 ```
 POST http://localhost:8080/api/places/1/like
 ```
@@ -417,8 +561,6 @@ Content-Type: application/json
   "address": "경상북도 경주시 불국로 385",
   "latitude": 35.7894,
   "longitude": 129.3320,
-  "phone": "054-746-9913",
-  "webpage": "https://www.bulguksa.or.kr",
   "summary": "신라 불교 문화의 정수를 보여주는 사찰",
   "information": "불국사는 신라 경덕왕 10년(751)에 김대성이 창건을 시작하여...",
   "group": "관광지",
@@ -442,8 +584,6 @@ Content-Type: application/json
 - `address` (optional): 한글 주소
 - `latitude` (required): 위도
 - `longitude` (required): 경도
-- `phone` (optional): 전화번호
-- `webpage` (optional): 웹사이트 URL
 - `summary` (optional): 요약
 - `information` (optional): 상세 정보
 - `group` (required): 대분류 (`관광지`, `맛집`, `카페`)

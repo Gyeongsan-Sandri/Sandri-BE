@@ -11,8 +11,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import sandri.sandriweb.domain.place.dto.PageResponseDto;
-import sandri.sandriweb.domain.place.dto.ReviewDto;
+import sandri.sandriweb.domain.review.dto.PageResponseDto;
+import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.review.dto.CreateReviewRequestDto;
 import sandri.sandriweb.domain.review.dto.UpdateReviewRequestDto;
 import sandri.sandriweb.domain.review.dto.UploadFileResponseDto;
@@ -121,7 +121,7 @@ public class ReviewController {
         }
     }
 
-    @PostMapping("/api/me/reviews/files")
+    @PostMapping("/me/files")
     @Operation(summary = "리뷰 사진/영상 업로드", 
                description = "리뷰에 첨부할 사진/영상을 AWS S3에 업로드합니다. 업로드된 URL을 반환합니다.")
     @ApiResponses(value = {
@@ -169,7 +169,7 @@ public class ReviewController {
         }
     }
 
-    @PostMapping("/api/me/reviews/places/{placeId}")
+    @PostMapping("/me/places/{placeId}")
     @Operation(summary = "리뷰 작성", 
                description = "현재 로그인한 사용자가 특정 장소에 대한 리뷰를 작성합니다. 사진/영상은 AWS S3에 업로드된 URL을 photoUrls에 포함하여 전송합니다.")
     @ApiResponses(value = {

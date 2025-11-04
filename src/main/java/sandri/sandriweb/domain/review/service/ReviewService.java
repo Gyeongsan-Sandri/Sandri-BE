@@ -7,8 +7,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import sandri.sandriweb.domain.place.dto.PageResponseDto;
-import sandri.sandriweb.domain.place.dto.ReviewDto;
+import sandri.sandriweb.domain.review.dto.PageResponseDto;
+import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 import sandri.sandriweb.domain.review.dto.CreateReviewRequestDto;
@@ -22,7 +22,9 @@ import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.global.service.S3Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -280,6 +282,26 @@ public class ReviewService {
     public Double getAverageRating(Long placeId) {
         Double averageRating = placeReviewRepository.findAverageRatingByPlaceId(placeId);
         return averageRating != null ? averageRating : 0.0;
+    }
+
+    /**
+     * 여러 장소의 평균 평점을 한 번에 조회 (배치 조회)
+     * @param placeIds 장소 ID 목록
+     * @return Place ID를 키로, 평균 평점을 값으로 하는 Map
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Double> getAverageRatingsByPlaceIds(List<Long> placeIds) {
+        if (placeIds == null || placeIds.isEmpty()) {
+            return new HashMap<>();
+        }
+        
+        List<Object[]> results = placeReviewRepository.findAverageRatingsByPlaceIds(placeIds);
+        
+        return results.stream()
+                .collect(Collectors.toMap(
+                        result -> (Long) result[0],
+                        result -> result[1] != null ? ((Double) result[1]) : 0.0
+                ));
     }
 
     /**

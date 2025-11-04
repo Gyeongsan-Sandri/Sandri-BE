@@ -42,6 +42,14 @@ public interface PlaceReviewRepository extends JpaRepository<PlaceReview, Long> 
     @Query("SELECT AVG(r.rating) FROM PlaceReview r WHERE r.place.id = :placeId")
     Double findAverageRatingByPlaceId(@Param("placeId") Long placeId);
     
+    /**
+     * 여러 장소의 평균 평점을 한 번에 조회 (배치 조회)
+     * @param placeIds 장소 ID 목록
+     * @return [placeId, averageRating] 형태의 Object[] 리스트
+     */
+    @Query("SELECT r.place.id, AVG(r.rating) FROM PlaceReview r WHERE r.place.id IN :placeIds GROUP BY r.place.id")
+    List<Object[]> findAverageRatingsByPlaceIds(@Param("placeIds") List<Long> placeIds);
+    
     // 페이징 지원 - 최신순
     @Query("SELECT DISTINCT r FROM PlaceReview r " +
            "LEFT JOIN FETCH r.user " +

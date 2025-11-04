@@ -20,13 +20,8 @@ public class PlaceDetailResponseDto {
     private String address; // 한글 주소
     private Double latitude;
     private Double longitude;
-    private String phone;
-    private String webpage;
     private String summary;
     private String information;
     private List<String> officialPhotos; // 공식 사진들
-    private List<String> reviewPhotos; // 리뷰 사진들 (요청 개수만큼)
-    private List<ReviewDto> reviews; // 리뷰들 (요청 개수만큼)
-    private List<NearbyPlaceDto> nearbyPlaces; // 근처 가볼만한 곳
 }
 
