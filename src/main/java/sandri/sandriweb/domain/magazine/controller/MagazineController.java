@@ -7,15 +7,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.magazine.dto.MagazineDetailResponseDto;
-import sandri.sandriweb.domain.magazine.dto.MagazineListDto;
 import sandri.sandriweb.domain.magazine.service.MagazineService;
 import sandri.sandriweb.domain.place.dto.CursorResponseDto;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
-import sandri.sandriweb.domain.user.repository.UserRepository;
 
 @RestController
 @RequestMapping("/api/magazines")
@@ -25,7 +23,6 @@ import sandri.sandriweb.domain.user.repository.UserRepository;
 public class MagazineController {
 
     private final MagazineService magazineService;
-    private final UserRepository userRepository;
 
     @GetMapping("/{magazineId}")
     @Operation(summary = "매거진 상세 조회",
@@ -61,37 +58,21 @@ public class MagazineController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    public ResponseEntity<ApiResponseDto<CursorResponseDto<MagazineListDto>>> getMagazineList(
-            @Parameter(description = "마지막으로 조회한 매거진 ID (첫 조회시 생략)", example = "123")
+    public ResponseEntity<ApiResponseDto<sandri.sandriweb.domain.magazine.dto.MagazineListCursorResponseDto>> getMagazineList(
+            @Parameter(description = "마지막으로 받은 매거진 ID(첫 조회 시 생략)", example = "15")
             @RequestParam(required = false) Long lastMagazineId,
-            @Parameter(description = "페이지 크기 (한 번에 조회할 개수)", example = "10")
+            @Parameter(description = "페이지 크기", example = "10")
             @RequestParam(defaultValue = "10") int size,
-            Authentication authentication) {
+            @AuthenticationPrincipal User user) {
 
-        log.info("매거진 목록 조회 (커서): lastMagazineId={}, size={}", lastMagazineId, size);
+        log.info("매거진 목록 조회(커서): lastMagazineId={}, size={}", lastMagazineId, size);
 
         try {
-            // 페이지 크기 유효성 검증
-            if (size <= 0 || size > 100) {
-                return ResponseEntity.badRequest()
-                        .body(ApiResponseDto.error("페이지 크기는 1 이상 100 이하여야 합니다."));
-            }
+            // 사용자 ID 조회 (로그인한 경우) - @AuthenticationPrincipal로 최적화
+            Long userId = (user != null) ? user.getId() : null;
 
-            // 사용자 ID 조회 (로그인한 경우)
-            Long userId = null;
-            if (authentication != null && authentication.isAuthenticated()) {
-                try {
-                    User user = userRepository.findByUsername(authentication.getName())
-                            .orElse(null);
-                    if (user != null) {
-                        userId = user.getId();
-                    }
-                } catch (Exception e) {
-                    log.debug("사용자 정보 조회 실패 (무시): {}", e.getMessage());
-                }
-            }
-
-            CursorResponseDto<MagazineListDto> response = magazineService.getMagazineList(lastMagazineId, size, userId);
+            sandri.sandriweb.domain.magazine.dto.MagazineListCursorResponseDto response =
+                    magazineService.getMagazineListByCursor(lastMagazineId, size, userId);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (Exception e) {
             log.error("매거진 목록 조회 중 오류 발생: ", e);
@@ -112,20 +93,16 @@ public class MagazineController {
     public ResponseEntity<ApiResponseDto<Boolean>> toggleLike(
             @Parameter(description = "매거진 ID", example = "1")
             @PathVariable Long magazineId,
-            Authentication authentication) {
+            @AuthenticationPrincipal User user) {
 
         log.info("매거진 좋아요 토글: magazineId={}", magazineId);
 
         try {
             // 인증 확인
-            if (authentication == null || !authentication.isAuthenticated()) {
+            if (user == null) {
                 return ResponseEntity.status(401)
                         .body(ApiResponseDto.error("로그인이 필요합니다."));
             }
-
-            // 사용자 ID 조회
-            User user = userRepository.findByUsername(authentication.getName())
-                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
 
             // 좋아요 토글
             boolean isLiked = magazineService.toggleLike(magazineId, user.getId());

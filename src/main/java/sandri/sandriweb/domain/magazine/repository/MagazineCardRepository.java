@@ -11,12 +11,11 @@ import java.util.List;
 @Repository
 public interface MagazineCardRepository extends JpaRepository<MagazineCard, Long> {
     
-    /**
-     * 매거진 ID로 카드 목록 조회
+    /*
+     * 매거진 ID로 카드 목록 조회 (순서대로)
      * @param magazineId 매거진 ID
-     * @return 카드 목록 (order 순으로 정렬)
+     * @return 카드 목록 (order 순서대로)
      */
     @Query("SELECT c FROM MagazineCard c WHERE c.magazine.id = :magazineId ORDER BY c.order ASC")
     List<MagazineCard> findByMagazineId(@Param("magazineId") Long magazineId);
 }
-

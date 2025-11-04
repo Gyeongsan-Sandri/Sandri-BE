@@ -31,10 +31,10 @@ public class Magazine extends BaseEntity {
     @Column(name = "content")
     private String content;
 
-    @OneToMany(mappedBy = "magazine", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "magazine", fetch = FetchType.LAZY, orphanRemoval = true, cascade = CascadeType.ALL)
     List<MagazineCard> cards = new ArrayList<>();
 
-    /**
+    /*
      * 매거진 정보 수정
      * @param name 매거진 이름
      * @param summary 매거진 요약
