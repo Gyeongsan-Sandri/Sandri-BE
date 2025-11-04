@@ -1,10 +1,12 @@
 spring:
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update  # 처음 시작 시: create, 이후: update, 운영: validate 또는 none
     show-sql: true
     defer-datasource-initialization: true
-    database-platform: org.hibernate.dialect.MySQLDialect
+    properties:
+      hibernate:
+        format_sql: true
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver

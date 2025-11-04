@@ -1,8 +1,9 @@
-package sandri.sandriweb.config;
+package sandri.sandriweb.global.config;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -36,6 +37,14 @@ public class SecurityConfig {
                         .requestMatchers("/", "/api/auth/**").permitAll()
                         .requestMatchers("/api/user/profile/**").permitAll()
                         .requestMatchers("/api/common/**").permitAll()
+                        // 리뷰 작성은 인증 필요 (더 구체적인 패턴을 먼저 선언)
+                        .requestMatchers(HttpMethod.POST, "/api/places/*/reviews").authenticated()
+                        .requestMatchers("/api/places/**").permitAll() // 나머지 장소 관련 API는 공개
+                        .requestMatchers("/api/reviews/**").permitAll()
+                        .requestMatchers("/api/advertise/**").permitAll() // 광고 조회는 인증 없이 가능
+                        .requestMatchers("/api/magazines/**").permitAll() // 매거진 조회는 인증 없이 가능
+                        .requestMatchers("/api/admin/**").permitAll() // 관리자 API는 인증 없이 가능
+                        .requestMatchers("/api/me/**").authenticated() // 마이페이지 관련 API는 인증 필요
                         .requestMatchers("/api/routes/share/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
