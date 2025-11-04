@@ -11,6 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.magazine.dto.MagazineDetailResponseDto;
 import sandri.sandriweb.domain.magazine.service.MagazineService;
+import sandri.sandriweb.domain.place.dto.CursorResponseDto;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
 
@@ -51,8 +52,8 @@ public class MagazineController {
     }
 
     @GetMapping
-    @Operation(summary = "매거진 목록 조회",
-               description = "매거진 목록을 조회합니다. 제목, 썸네일(첫 번째 카드 이미지), 요약, 좋아요 여부를 반환합니다. 로그인한 경우 사용자가 좋아요한 매거진 여부도 함께 반환됩니다.")
+    @Operation(summary = "매거진 목록 조회 (커서 기반 페이징)",
+               description = "매거진 목록을 커서 기반으로 페이징하여 조회합니다. 제목, 썸네일(첫 번째 카드 이미지), 요약, 좋아요 여부를 반환합니다. 로그인한 경우 사용자가 좋아요한 매거진 여부도 함께 반환됩니다. 마지막으로 조회한 매거진 ID를 기준으로 다음 페이지를 가져옵니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")

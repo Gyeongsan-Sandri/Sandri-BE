@@ -440,13 +440,14 @@ public class PlaceService {
 
     /**
      * 장소 사진 추가 (관리자용)
-     * @param request 장소 사진 생성 요청 DTO
+     * @param placeId 장소 ID
+     * @param photoUrl 사진 URL
      * @return 생성된 사진 ID
      */
     @Transactional
-    public Long createPlacePhoto(CreatePlacePhotoRequestDto request) {
+    public Long createPlacePhoto(Long placeId, String photoUrl) {
         // 장소 조회
-        Place place = placeRepository.findById(request.getPlaceId())
+        Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
 
         // 최대 order 값 조회 (새 사진의 order = MAX(order) + 1)
