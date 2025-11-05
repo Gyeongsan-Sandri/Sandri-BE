@@ -72,14 +72,32 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 로컬 개발 환경에서는 모든 origin 허용 (Swagger UI 테스트 포함)
-        // allowCredentials를 false로 설정하면 와일드카드 사용 가능
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        
+        // 명시적으로 허용할 origin 목록 (배포 환경 및 개발 환경 모두 고려)
+        configuration.setAllowedOrigins(List.of(
+                "http://13.125.26.64:8080",         // 현재 배포 서버 (IP 주소)
+                "https://api.sandri.com",           // 운영 서버 (도메인 적용 후)
+                "http://localhost:8080",            // 로컬 개발 서버
+                "http://127.0.0.1:8080",            // 로컬 개발 서버 (대체)
+                "http://localhost:3000",            // 프론트엔드 개발 서버 (필요시)
+                "https://sandri.com",               // 프론트엔드 도메인 (필요시)
+                "https://www.sandri.com"            // 프론트엔드 도메인 (필요시)
+        ));
+        
+        // 모든 HTTP 메서드 허용
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        
+        // 모든 헤더 허용
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(false); // Swagger UI 테스트를 위해 false로 설정
+        
+        // 인증 정보 포함 허용 (필요한 경우)
+        configuration.setAllowCredentials(true);
+        
+        // 응답 헤더 노출
         configuration.setExposedHeaders(List.of("*"));
-        configuration.setMaxAge(3600L); // preflight 요청 캐시 시간
+        
+        // preflight 요청 캐시 시간 (1시간)
+        configuration.setMaxAge(3600L);
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
