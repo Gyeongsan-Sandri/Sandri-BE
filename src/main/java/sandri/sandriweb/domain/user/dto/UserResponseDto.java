@@ -23,6 +23,7 @@ public class UserResponseDto {
     private String location;
     private String referrerUsername;
     private boolean enabled;
+    private User.TravelStyle travelStyle;
     
     public static UserResponseDto from(User user) {
         return UserResponseDto.builder()
@@ -35,6 +36,7 @@ public class UserResponseDto {
                 .location(user.getLocation())
                 .referrerUsername(user.getReferrerUsername())
                 .enabled(user.isEnabled())
+                .travelStyle(user.getTravelStyle())
                 .build();
     }
 }

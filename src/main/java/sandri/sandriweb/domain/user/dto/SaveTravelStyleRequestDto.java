@@ -1,0 +1,19 @@
+package sandri.sandriweb.domain.user.dto;
+
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import sandri.sandriweb.domain.user.entity.User;
+
+@Getter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class SaveTravelStyleRequestDto {
+    
+    @NotNull(message = "여행 스타일은 필수입니다")
+    private User.TravelStyle travelStyle;
+}
+
