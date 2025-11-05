@@ -1,5 +1,6 @@
 package sandri.sandriweb.domain.review.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -15,12 +16,25 @@ import java.util.stream.Collectors;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "리뷰 응답 DTO")
 public class ReviewDto {
+    
+    @Schema(description = "리뷰 ID", example = "1")
     private Long reviewId;
+    
+    @Schema(description = "작성자 정보")
     private UserProfileDto user;
+    
+    @Schema(description = "리뷰 내용", example = "정말 좋은 장소였습니다!")
     private String content;
+    
+    @Schema(description = "별점 (1-5)", example = "5")
     private Integer rating;
+    
+    @Schema(description = "작성 일시", example = "2024-11-05T10:30:00")
     private LocalDateTime createdAt;
+    
+    @Schema(description = "사진 URL 리스트", example = "[\"https://s3.../photo1.jpg\"]")
     private List<String> photoUrls;
 
     public static ReviewDto from(PlaceReview review) {

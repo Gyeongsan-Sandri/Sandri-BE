@@ -1,6 +1,11 @@
 package sandri.sandriweb.domain.user.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,14 +26,38 @@ public class AuthController {
     private final UserService userService;
     
     @PostMapping("/login")
-    @Operation(summary = "로그인", description = "아이디와 비밀번호로 로그인합니다")
+    @Operation(
+            summary = "로그인",
+            description = "아이디와 비밀번호로 로그인합니다. 로그인 성공 시 세션 쿠키가 자동으로 설정됩니다.",
+            requestBody = @RequestBody(
+                    description = "로그인 요청 정보",
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = LoginRequestDto.class),
+                            examples = @ExampleObject(
+                                    name = "로그인 예제",
+                                    value = "{\n  \"username\": \"hong123\",\n  \"password\": \"password123!\"\n}"
+                            )
+                    )
+            )
+    )
     @ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그인 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 실패")
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "로그인 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseDto.class),
+                            examples = @ExampleObject(
+                                    name = "성공 응답",
+                                    value = "{\n  \"success\": true,\n  \"message\": \"로그인 성공\",\n  \"data\": {\n    \"user\": {\n      \"id\": 1,\n      \"name\": \"홍길동\",\n      \"nickname\": \"홍길동\",\n      \"username\": \"hong123\",\n      \"birthDate\": \"1990-01-01\",\n      \"gender\": \"MALE\",\n      \"location\": \"경산시\",\n      \"enabled\": true\n    }\n  }\n}"
+                            )
+                    )
+            ),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @ApiResponse(responseCode = "401", description = "인증 실패")
     })
     public ResponseEntity<ApiResponseDto<LoginResponseDto>> login(
-            @Valid @RequestBody LoginRequestDto request) {
+            @Valid @org.springframework.web.bind.annotation.RequestBody LoginRequestDto request) {
         
         log.info("로그인 시도: {}", request.getUsername());
         ApiResponseDto<LoginResponseDto> response = userService.login(request);
@@ -41,13 +70,37 @@ public class AuthController {
     }
     
     @PostMapping("/register")
-    @Operation(summary = "회원가입", description = "사용자 정보를 입력하여 회원가입합니다")
+    @Operation(
+            summary = "회원가입",
+            description = "사용자 정보를 입력하여 회원가입합니다. 아이디와 닉네임은 중복될 수 없습니다.",
+            requestBody = @RequestBody(
+                    description = "회원가입 요청 정보",
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = RegisterRequestDto.class),
+                            examples = @ExampleObject(
+                                    name = "회원가입 예제",
+                                    value = "{\n  \"name\": \"홍길동\",\n  \"username\": \"hong123\",\n  \"password\": \"password123!\",\n  \"confirmPassword\": \"password123!\",\n  \"nickname\": \"홍길동\",\n  \"birthDate\": \"1990-01-01\",\n  \"gender\": \"MALE\",\n  \"location\": \"경산시\",\n  \"referrerUsername\": \"friend123\"\n}"
+                            )
+                    )
+            )
+    )
     @ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "회원가입 완료"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "회원가입 완료",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseDto.class),
+                            examples = @ExampleObject(
+                                    name = "성공 응답",
+                                    value = "{\n  \"success\": true,\n  \"message\": \"회원가입이 완료되었습니다\",\n  \"data\": {\n    \"id\": 1,\n    \"name\": \"홍길동\",\n    \"nickname\": \"홍길동\",\n    \"username\": \"hong123\",\n    \"birthDate\": \"1990-01-01\",\n    \"gender\": \"MALE\",\n    \"location\": \"경산시\",\n    \"enabled\": true\n  }\n}"
+                            )
+                    )
+            ),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 (중복된 아이디/닉네임, 유효성 검증 실패)")
     })
     public ResponseEntity<ApiResponseDto<UserResponseDto>> register(
-            @Valid @RequestBody RegisterRequestDto request) {
+            @Valid @org.springframework.web.bind.annotation.RequestBody RegisterRequestDto request) {
         
         log.info("회원가입 시도: {}", request.getNickname());
         ApiResponseDto<UserResponseDto> response = userService.register(request);
