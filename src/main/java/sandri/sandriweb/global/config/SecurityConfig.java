@@ -68,29 +68,25 @@ public class SecurityConfig {
         
         return http.build();
     }
-    
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        // 모든 origin 허용 (개발 환경용)
-        configuration.setAllowedOriginPatterns(List.of("*"));
-        
-        // 모든 HTTP 메서드 허용
+
+        // 허용할 Origin 명시적으로 등록
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:5173",      // 로컬 프론트
+                "http://13.125.26.64:8080",   // Swagger 테스트
+                "https://sandri.site",// 실제 배포
+                "http://localhost:*"        // 로컬 테스트
+        ));
+
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        
-        // 모든 헤더 허용
         configuration.setAllowedHeaders(List.of("*"));
-        
-        // 인증 정보 포함 허용
         configuration.setAllowCredentials(true);
-        
-        // 응답 헤더 노출
         configuration.setExposedHeaders(List.of("*"));
-        
-        // preflight 요청 캐시 시간 (1시간)
         configuration.setMaxAge(3600L);
-        
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

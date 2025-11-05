@@ -2,7 +2,6 @@ package sandri.sandriweb.domain.user.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -59,10 +58,10 @@ public class User extends BaseEntity implements UserDetails {
     @Enumerated(EnumType.STRING)
     private TravelStyle travelStyle;
     
-    @Column(precision = 10, scale = 7)
+    @Column
     private Double latitude;
     
-    @Column(precision = 10, scale = 7)
+    @Column
     private Double longitude;
     
     // UserDetails 구현
