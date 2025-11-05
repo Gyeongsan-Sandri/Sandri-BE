@@ -6,6 +6,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sandri.sandriweb.domain.place.entity.Place;
+import sandri.sandriweb.domain.place.repository.PlacePhotoRepository;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 import sandri.sandriweb.domain.review.repository.PlaceReviewRepository;
 import sandri.sandriweb.domain.user.dto.*;
@@ -15,6 +16,7 @@ import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.domain.user.repository.UserVisitedPlaceRepository;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,6 +29,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserVisitedPlaceRepository userVisitedPlaceRepository;
     private final PlaceRepository placeRepository;
+    private final PlacePhotoRepository placePhotoRepository;
     private final PlaceReviewRepository placeReviewRepository;
     @Transactional
     public ApiResponseDto<LoginResponseDto> login(LoginRequestDto request) {
@@ -169,7 +172,13 @@ public class UserService {
             boolean hasReview = placeReviewRepository.findByPlaceIdOrderByCreatedAtDesc(place.getId()).stream()
                     .anyMatch(review -> review.getUser().getId().equals(user.getId()) && review.isEnabled());
             
-            VisitedPlaceResponseDto responseDto = VisitedPlaceResponseDto.from(saved, hasReview);
+            // 썸네일 URL 조회 (첫 번째 사진)
+            String thumbnailUrl = placePhotoRepository.findByPlaceId(place.getId()).stream()
+                    .findFirst()
+                    .map(photo -> photo.getPhotoUrl())
+                    .orElse(null);
+            
+            VisitedPlaceResponseDto responseDto = VisitedPlaceResponseDto.from(saved, thumbnailUrl, hasReview);
             return ApiResponseDto.success("방문 장소가 저장되었습니다", responseDto);
             
         } catch (Exception e) {
@@ -185,13 +194,26 @@ public class UserService {
             
             List<UserVisitedPlace> visitedPlaces = userVisitedPlaceRepository.findByUserIdOrderByVisitDateDesc(user.getId());
             
+            // 장소 ID 목록 추출
+            List<Long> placeIds = visitedPlaces.stream()
+                    .map(uvp -> uvp.getPlace().getId())
+                    .collect(Collectors.toList());
+            
+            // 배치로 썸네일 URL 조회 (N+1 문제 방지)
+            Map<Long, String> thumbnailMap = placePhotoRepository.findFirstPhotoUrlByPlaceIdIn(placeIds).stream()
+                    .collect(Collectors.toMap(
+                            result -> ((Number) result[0]).longValue(),
+                            result -> (String) result[1]
+                    ));
+            
             // 각 방문 장소의 리뷰 작성 여부 확인
             List<VisitedPlaceResponseDto> responseDtos = visitedPlaces.stream()
                     .map(uvp -> {
                         // 각 장소별로 리뷰 확인
                         boolean hasReview = placeReviewRepository.findByPlaceIdOrderByCreatedAtDesc(uvp.getPlace().getId()).stream()
                                 .anyMatch(review -> review.getUser().getId().equals(user.getId()) && review.isEnabled());
-                        return VisitedPlaceResponseDto.from(uvp, hasReview);
+                        String thumbnailUrl = thumbnailMap.get(uvp.getPlace().getId());
+                        return VisitedPlaceResponseDto.from(uvp, thumbnailUrl, hasReview);
                     })
                     .collect(Collectors.toList());
             
