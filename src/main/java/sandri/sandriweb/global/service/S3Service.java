@@ -1,6 +1,7 @@
 package sandri.sandriweb.global.service;
 
 import org.springframework.web.multipart.MultipartFile;
+import sandri.sandriweb.domain.review.dto.PresignedUrlDto;
 
 import java.util.List;
 
@@ -29,7 +30,7 @@ public interface S3Service {
      * @param contentType 파일 타입 (예: image/jpeg, image/png, video/mp4)
      * @return PresignedUrlDto (presignedUrl과 finalUrl 포함)
      */
-    sandri.sandriweb.domain.review.dto.PresignedUrlDto generatePresignedUrl(String fileName, String contentType);
+    PresignedUrlDto generatePresignedUrl(String fileName, String contentType);
 
     /**
      * S3에서 파일 삭제

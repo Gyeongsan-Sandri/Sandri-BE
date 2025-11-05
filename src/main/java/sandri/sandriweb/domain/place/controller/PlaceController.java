@@ -68,14 +68,14 @@ public class PlaceController {
             @Parameter(description = "관광지 ID", example = "1")
             @PathVariable Long placeId,
             @Parameter(description = "카테고리 (관광지/맛집/카페)", example = "맛집")
-            @RequestParam String category,
+            @RequestParam String group,
             @Parameter(description = "조회할 개수", example = "3")
             @RequestParam(defaultValue = "3") int count) {
 
-        log.info("근처 장소 조회: placeId={}, category={}, count={}", placeId, category, count);
+        log.info("근처 장소 조회: placeId={}, category={}, count={}", placeId, group, count);
 
         try {
-            List<NearbyPlaceDto> response = placeService.getNearbyPlacesByPlaceId(placeId, category, count);
+            List<NearbyPlaceDto> response = placeService.getNearbyPlacesByPlaceId(placeId, group, count);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (RuntimeException e) {
             log.error("근처 장소 조회 실패: {}", e.getMessage());

@@ -80,14 +80,14 @@ public class PlaceService {
     /**
      * Place ID로 근처 가볼만한 곳 조회 (카테고리별)
      * @param placeId 기준 관광지 ID
-     * @param categoryName 카테고리 이름 (관광지/맛집/카페)
+     * @param groupName 카테고리 이름 (관광지/맛집/카페)
      * @param limit 조회할 개수
      * @return 근처 관광지 리스트
      */
-    public List<NearbyPlaceDto> getNearbyPlacesByPlaceId(Long placeId, String categoryName, int limit) {
+    public List<NearbyPlaceDto> getNearbyPlacesByPlaceId(Long placeId, String groupName, int limit) {
         // 1. 카테고리 검증
         try {
-            PlaceCategory.valueOf(categoryName);
+            PlaceCategory.valueOf(groupName);
         } catch (IllegalArgumentException e) {
             throw new RuntimeException("카테고리는 '관광지', '맛집', '카페' 중 하나여야 합니다.");
         }
@@ -104,7 +104,7 @@ public class PlaceService {
                 place.getLocation(),
                 radius,
                 place.getId(),
-                categoryName,
+                groupName,
                 limit
         );
         
@@ -131,7 +131,7 @@ public class PlaceService {
                             .name(nearbyPlace.getName())
                             .thumbnailUrl(thumbnailUrl)
                             .distanceInMeters(distance)
-                            .categoryName(nearbyPlace.getCategory() != null ? nearbyPlace.getCategory().getDisplayName() : null)
+                            .groupName(nearbyPlace.getGroup() != null ? nearbyPlace.getGroup().toString() : null)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -182,7 +182,7 @@ public class PlaceService {
                             .name(nearbyPlace.getName())
                             .thumbnailUrl(thumbnailUrl)
                             .distanceInMeters(distance)
-                            .categoryName(nearbyPlace.getCategory() != null ? nearbyPlace.getCategory().getDisplayName() : null)
+                            .groupName(nearbyPlace.getGroup() != null ? nearbyPlace.getGroup().toString() : null)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -358,7 +358,7 @@ public class PlaceService {
                             .likeCount(likeCount)
                             .isLiked(isLiked)
                             .groupName(place.getGroup() != null ? place.getGroup().name() : null)
-                            .categoryName(place.getCategory() != null ? place.getCategory().getDisplayName() : null)
+                            .categoryName(place.getGroup() != null ? place.getGroup().toString() : null)
                             .build();
                 })
                 .collect(Collectors.toList());
