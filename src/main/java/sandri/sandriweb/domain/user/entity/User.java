@@ -106,23 +106,35 @@ public class User extends BaseEntity implements UserDetails {
     }
     
     public enum TravelStyle {
-        자연_힐링("자연/힐링"),
-        역사_전통("역사/전통"),
-        문화_체험("문화/체험"),
-        식도락("식도락"),
-        액티비티("액티비티"),
-        쇼핑("쇼핑"),
-        휴양("휴양"),
-        도시탐방("도시 탐방");
+        모험왕("모험왕", "실외 + 빡빡 + 로컬", "쉬는 건 집에서! 여행은 발이 부르트도록 해야 제맛"),
+        감성요정("감성요정", "실내 + 여유 + 감성", "내 여행 앨범은 곧 작품집"),
+        핫플_헌터("핫플 헌터", "실외 + 빡빡 + 감성", "유명 포토스팟, 공연, 핫플을 빠짐없이 방문"),
+        현지인("현지인", "실외 + 여유 + 로컬", "관광지도 좋지만 진짜는 골목길에 있다"),
+        철저_플래너("철저 플래너", "실내 + 빡빡 + 로컬", "여행은 준비 70%, 실행 30%다"),
+        힐링_거북이("힐링 거북이", "실내 + 여유 + 로컬", "여행도 결국은 힐링이 우선이지"),
+        산책가("산책가", "실외 + 여유 + 감성", "시간은 느리게, 감성은 깊게"),
+        갤러리피플("갤러리피플", "실내 + 빡빡 + 감성", "내 일정은 곧 아트 전시회");
         
         private final String displayName;
+        private final String description;
+        private final String tagline;
         
-        TravelStyle(String displayName) {
+        TravelStyle(String displayName, String description, String tagline) {
             this.displayName = displayName;
+            this.description = description;
+            this.tagline = tagline;
         }
         
         public String getDisplayName() {
             return displayName;
+        }
+        
+        public String getDescription() {
+            return description;
+        }
+        
+        public String getTagline() {
+            return tagline;
         }
     }
 }
