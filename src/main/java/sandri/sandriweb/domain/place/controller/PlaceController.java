@@ -2,6 +2,10 @@ package sandri.sandriweb.domain.place.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -30,12 +34,22 @@ public class PlaceController {
 
     @GetMapping("/{placeId}")
     @Operation(summary = "관광지 상세 정보 조회", 
-               description = "관광지의 기본 정보를 조회합니다. 이름, 주소, 평점, 카테고리, 공식 사진, 근처 가볼만한 곳을 반환합니다. " +
+               description = "관광지의 기본 정보를 조회합니다. 이름, 주소, 평점, 카테고리, 공식 사진을 반환합니다. " +
                            "리뷰 정보는 /api/places/{placeId}/reviews API를 별도로 호출하세요.")
     @ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "관광지 없음")
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseDto.class),
+                            examples = @ExampleObject(
+                                    name = "성공 응답",
+                                    value = "{\n  \"success\": true,\n  \"message\": \"성공\",\n  \"data\": {\n    \"placeId\": 1,\n    \"name\": \"경주 불국사\",\n    \"groupName\": \"관광지\",\n    \"categoryName\": \"역사/전통\",\n    \"rating\": 4.5,\n    \"address\": \"경상북도 경주시 불국로 385\",\n    \"latitude\": 35.7894,\n    \"longitude\": 129.3320,\n    \"summary\": \"신라 불교 문화의 정수를 보여주는 사찰\",\n    \"officialPhotos\": [\n      {\n        \"order\": 0,\n        \"photoUrl\": \"https://s3.../photo1.jpg\"\n      }\n    ]\n  }\n}"
+                            )
+                    )
+            ),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @ApiResponse(responseCode = "404", description = "관광지 없음")
     })
     public ResponseEntity<ApiResponseDto<PlaceDetailResponseDto>> getPlaceDetail(
             @Parameter(description = "관광지 ID", example = "1")
