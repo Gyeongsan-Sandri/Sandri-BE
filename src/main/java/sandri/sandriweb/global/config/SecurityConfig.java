@@ -73,16 +73,8 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // 명시적으로 허용할 origin 목록 (배포 환경 및 개발 환경 모두 고려)
-        configuration.setAllowedOrigins(List.of(
-                "http://13.125.26.64:8080",         // 현재 배포 서버 (IP 주소)
-                "https://api.sandri.com",           // 운영 서버 (도메인 적용 후)
-                "http://localhost:8080",            // 로컬 개발 서버
-                "http://127.0.0.1:8080",            // 로컬 개발 서버 (대체)
-                "http://localhost:3000",            // 프론트엔드 개발 서버 (필요시)
-                "https://sandri.com",               // 프론트엔드 도메인 (필요시)
-                "https://www.sandri.com"            // 프론트엔드 도메인 (필요시)
-        ));
+        // 모든 origin 허용 (개발 환경용)
+        configuration.setAllowedOriginPatterns(List.of("*"));
         
         // 모든 HTTP 메서드 허용
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
@@ -90,7 +82,7 @@ public class SecurityConfig {
         // 모든 헤더 허용
         configuration.setAllowedHeaders(List.of("*"));
         
-        // 인증 정보 포함 허용 (필요한 경우)
+        // 인증 정보 포함 허용
         configuration.setAllowCredentials(true);
         
         // 응답 헤더 노출
