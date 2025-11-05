@@ -26,5 +26,23 @@ google:
     api-key: ${GOOGLE_MAPS_API_KEY:your-pop-google-maps-api-key-here}
     base-url: https://maps.googleapis.com/maps/api
 
+# AWS S3
+cloud:
+  aws:
+    credentials:
+      access-key: ${ACCESS_KEY}
+      secret-key: ${SECRET_KEY}
+    region:
+      static: ap-northeast-2  # 버킷의 리전
+    s3:
+      bucket: sandri-img-bucket   # 버킷 이름
+    stack:
+      auto: false
+
+  servlet:
+    multipart:
+      max-file-size: 10MB # 업로드할 수 있는 개별 파일의 최대 크기 (기본 1MB)
+      max-request-size: 10MB # multipart/form-data 요청의 최대 허용 크기 (기본 10MB)
+
 app:
   base-url: ${APP_BASE_URL:http://localhost:8080}

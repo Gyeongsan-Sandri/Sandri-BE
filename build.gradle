@@ -41,6 +41,8 @@ dependencies {
     implementation 'org.hibernate.orm:hibernate-spatial'
     implementation 'org.locationtech.jts:jts-core'
     implementation 'com.querydsl:querydsl-spatial'
+    implementation 'org.springframework.cloud:spring-cloud-starter-aws:2.2.6.RELEASE'
+
 
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
