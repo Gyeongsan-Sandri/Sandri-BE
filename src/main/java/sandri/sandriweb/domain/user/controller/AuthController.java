@@ -1,6 +1,7 @@
 package sandri.sandriweb.domain.user.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -110,5 +111,75 @@ public class AuthController {
         } else {
             return ResponseEntity.badRequest().body(response);
         }
+    }
+    
+    @GetMapping("/check-username")
+    @Operation(
+            summary = "아이디 중복 확인",
+            description = "회원가입 전 아이디 중복 여부를 확인합니다. 사용 가능한 아이디인지 확인할 수 있습니다."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "중복 확인 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseDto.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "사용 가능",
+                                            value = "{\n  \"success\": true,\n  \"message\": \"성공\",\n  \"data\": {\n    \"isDuplicate\": false,\n    \"message\": \"사용 가능한 아이디입니다\"\n  }\n}"
+                                    ),
+                                    @ExampleObject(
+                                            name = "중복됨",
+                                            value = "{\n  \"success\": true,\n  \"message\": \"성공\",\n  \"data\": {\n    \"isDuplicate\": true,\n    \"message\": \"이미 사용 중인 아이디입니다\"\n  }\n}"
+                                    )
+                            }
+                    )
+            ),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    public ResponseEntity<ApiResponseDto<CheckDuplicateResponseDto>> checkUsername(
+            @Parameter(description = "확인할 아이디", example = "hong123", required = true)
+            @RequestParam String username) {
+        
+        log.info("아이디 중복 확인 요청: username={}", username);
+        ApiResponseDto<CheckDuplicateResponseDto> response = userService.checkUsernameDuplicate(username);
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    @GetMapping("/check-nickname")
+    @Operation(
+            summary = "닉네임 중복 확인",
+            description = "회원가입 전 닉네임 중복 여부를 확인합니다. 사용 가능한 닉네임인지 확인할 수 있습니다."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "중복 확인 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseDto.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "사용 가능",
+                                            value = "{\n  \"success\": true,\n  \"message\": \"성공\",\n  \"data\": {\n    \"isDuplicate\": false,\n    \"message\": \"사용 가능한 닉네임입니다\"\n  }\n}"
+                                    ),
+                                    @ExampleObject(
+                                            name = "중복됨",
+                                            value = "{\n  \"success\": true,\n  \"message\": \"성공\",\n  \"data\": {\n    \"isDuplicate\": true,\n    \"message\": \"이미 사용 중인 닉네임입니다\"\n  }\n}"
+                                    )
+                            }
+                    )
+            ),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    public ResponseEntity<ApiResponseDto<CheckDuplicateResponseDto>> checkNickname(
+            @Parameter(description = "확인할 닉네임", example = "홍길동", required = true)
+            @RequestParam String nickname) {
+        
+        log.info("닉네임 중복 확인 요청: nickname={}", nickname);
+        ApiResponseDto<CheckDuplicateResponseDto> response = userService.checkNicknameDuplicate(nickname);
+        
+        return ResponseEntity.ok(response);
     }
 }
