@@ -244,4 +244,44 @@ public class UserService {
             return ApiResponseDto.error(e.getMessage());
         }
     }
+    
+    /**
+     * 아이디 중복 확인
+     */
+    public ApiResponseDto<CheckDuplicateResponseDto> checkUsernameDuplicate(String username) {
+        try {
+            boolean isDuplicate = userRepository.existsByUsername(username);
+            
+            CheckDuplicateResponseDto response = CheckDuplicateResponseDto.builder()
+                    .isDuplicate(isDuplicate)
+                    .message(isDuplicate ? "이미 사용 중인 아이디입니다" : "사용 가능한 아이디입니다")
+                    .build();
+            
+            return ApiResponseDto.success(response);
+            
+        } catch (Exception e) {
+            log.error("아이디 중복 확인 실패: {}", e.getMessage());
+            return ApiResponseDto.error("중복 확인 중 오류가 발생했습니다");
+        }
+    }
+    
+    /**
+     * 닉네임 중복 확인
+     */
+    public ApiResponseDto<CheckDuplicateResponseDto> checkNicknameDuplicate(String nickname) {
+        try {
+            boolean isDuplicate = userRepository.existsByNickname(nickname);
+            
+            CheckDuplicateResponseDto response = CheckDuplicateResponseDto.builder()
+                    .isDuplicate(isDuplicate)
+                    .message(isDuplicate ? "이미 사용 중인 닉네임입니다" : "사용 가능한 닉네임입니다")
+                    .build();
+            
+            return ApiResponseDto.success(response);
+            
+        } catch (Exception e) {
+            log.error("닉네임 중복 확인 실패: {}", e.getMessage());
+            return ApiResponseDto.error("중복 확인 중 오류가 발생했습니다");
+        }
+    }
 }
