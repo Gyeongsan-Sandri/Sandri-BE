@@ -21,6 +21,8 @@ public class UserResponseDto {
     private LocalDate birthDate;
     private User.Gender gender;
     private String location;
+    private Double latitude;
+    private Double longitude;
     private String referrerUsername;
     private boolean enabled;
     private User.TravelStyle travelStyle;
@@ -34,6 +36,8 @@ public class UserResponseDto {
                 .birthDate(user.getBirthDate())
                 .gender(user.getGender())
                 .location(user.getLocation())
+                .latitude(user.getLatitude())
+                .longitude(user.getLongitude())
                 .referrerUsername(user.getReferrerUsername())
                 .enabled(user.isEnabled())
                 .travelStyle(user.getTravelStyle())
