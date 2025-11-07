@@ -80,14 +80,14 @@ public class PlaceService {
     /**
      * Place ID로 근처 가볼만한 곳 조회 (카테고리별)
      * @param placeId 기준 관광지 ID
-     * @param categoryName 카테고리 이름 (관광지/맛집/카페)
+     * @param groupName 카테고리 이름 (관광지/맛집/카페)
      * @param limit 조회할 개수
      * @return 근처 관광지 리스트
      */
-    public List<NearbyPlaceDto> getNearbyPlacesByPlaceId(Long placeId, String categoryName, int limit) {
+    public List<NearbyPlaceDto> getNearbyPlacesByPlaceId(Long placeId, String groupName, int limit) {
         // 1. 카테고리 검증
         try {
-            PlaceCategory.valueOf(categoryName);
+            PlaceCategory.valueOf(groupName);
         } catch (IllegalArgumentException e) {
             throw new RuntimeException("카테고리는 '관광지', '맛집', '카페' 중 하나여야 합니다.");
         }
@@ -104,7 +104,7 @@ public class PlaceService {
                 place.getLocation(),
                 radius,
                 place.getId(),
-                categoryName,
+                groupName,
                 limit
         );
         
@@ -131,7 +131,7 @@ public class PlaceService {
                             .name(nearbyPlace.getName())
                             .thumbnailUrl(thumbnailUrl)
                             .distanceInMeters(distance)
-                            .categoryName(nearbyPlace.getCategory() != null ? nearbyPlace.getCategory().getDisplayName() : null)
+                            .categoryName(nearbyPlace.getCategory() != null ? nearbyPlace.getGroup().toString() : null)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -182,7 +182,7 @@ public class PlaceService {
                             .name(nearbyPlace.getName())
                             .thumbnailUrl(thumbnailUrl)
                             .distanceInMeters(distance)
-                            .categoryName(nearbyPlace.getCategory() != null ? nearbyPlace.getCategory().getDisplayName() : null)
+                            .categoryName(nearbyPlace.getCategory() != null ? nearbyPlace.getGroup().toString() : null)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -358,7 +358,7 @@ public class PlaceService {
                             .likeCount(likeCount)
                             .isLiked(isLiked)
                             .groupName(place.getGroup() != null ? place.getGroup().name() : null)
-                            .categoryName(place.getCategory() != null ? place.getCategory().getDisplayName() : null)
+                            .categoryName(place.getGroup() != null ? place.getGroup().toString() : null)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -416,6 +416,11 @@ public class PlaceService {
      */
     @Transactional
     public Long createPlace(CreatePlaceRequestDto request) {
+        // 중복 검사
+        if (placeRepository.existsByName(request.getName())) {
+            throw new RuntimeException("이미 존재하는 장소 이름입니다: " + request.getName());
+        }
+
         // 위도/경도를 Point로 변환
         Point location = geometryFactory.createPoint(
                 new org.locationtech.jts.geom.Coordinate(request.getLongitude(), request.getLatitude())
@@ -434,6 +439,50 @@ public class PlaceService {
 
         Place savedPlace = placeRepository.save(place);
         log.info("장소 생성 완료: placeId={}, name={}", savedPlace.getId(), savedPlace.getName());
+
+        return savedPlace.getId();
+    }
+
+    /**
+     * 장소 정보 수정 (관리자용)
+     * @param placeId 장소 ID
+     * @param request 수정 요청 DTO
+     * @return 수정된 장소 ID
+     */
+    @Transactional
+    public Long updatePlace(Long placeId, UpdatePlaceRequestDto request) {
+        // 장소 조회
+        Place place = placeRepository.findById(placeId)
+                .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
+
+        // 이름 변경 시 중복 검사 (다른 장소와 이름이 겹치는지 확인)
+        if (request.getName() != null && !request.getName().equals(place.getName())) {
+            if (placeRepository.existsByName(request.getName())) {
+                throw new RuntimeException("이미 존재하는 장소 이름입니다: " + request.getName());
+            }
+        }
+
+        // 위치 정보 업데이트 (위도/경도가 모두 제공된 경우)
+        Point location = null;
+        if (request.getLatitude() != null && request.getLongitude() != null) {
+            location = geometryFactory.createPoint(
+                    new org.locationtech.jts.geom.Coordinate(request.getLongitude(), request.getLatitude())
+            );
+        }
+
+        // 부분 업데이트 (null이 아닌 필드만 업데이트)
+        place.update(
+                request.getName(),
+                request.getAddress(),
+                location,
+                request.getSummary(),
+                request.getInformation(),
+                request.getGroup(),
+                request.getCategory()
+        );
+
+        Place savedPlace = placeRepository.save(place);
+        log.info("장소 수정 완료: placeId={}, name={}", savedPlace.getId(), savedPlace.getName());
 
         return savedPlace.getId();
     }

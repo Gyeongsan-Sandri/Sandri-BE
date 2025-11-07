@@ -17,6 +17,7 @@ import sandri.sandriweb.domain.magazine.dto.UpdateMagazineRequestDto;
 import sandri.sandriweb.domain.magazine.service.MagazineService;
 import sandri.sandriweb.domain.place.dto.CreatePlacePhotoRequestDto;
 import sandri.sandriweb.domain.place.dto.CreatePlaceRequestDto;
+import sandri.sandriweb.domain.place.dto.UpdatePlaceRequestDto;
 import sandri.sandriweb.domain.place.service.PlaceService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 
@@ -52,6 +53,35 @@ public class AdminController {
             log.error("장소 생성 중 오류 발생: ", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponseDto.error("장소 생성 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    @PutMapping("/places/{placeId}")
+    @Operation(summary = "장소 수정",
+               description = "관리자가 장소 정보를 수정합니다. 요청에 포함된 필드만 업데이트되며, 생략된 필드는 기존 값을 유지합니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "장소 없음")
+    })
+    public ResponseEntity<ApiResponseDto<Long>> updatePlace(
+            @Parameter(description = "장소 ID", example = "1")
+            @PathVariable Long placeId,
+            @Valid @RequestBody UpdatePlaceRequestDto request) {
+
+        log.info("장소 수정 요청: placeId={}", placeId);
+
+        try {
+            Long updatedPlaceId = placeService.updatePlace(placeId, request);
+            return ResponseEntity.ok(ApiResponseDto.success("장소가 수정되었습니다.", updatedPlaceId));
+        } catch (RuntimeException e) {
+            log.error("장소 수정 실패: {}", e.getMessage());
+            return ResponseEntity.status(404)
+                    .body(ApiResponseDto.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("장소 수정 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("장소 수정 중 오류가 발생했습니다: " + e.getMessage()));
         }
     }
 
