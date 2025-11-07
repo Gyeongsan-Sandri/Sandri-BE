@@ -2,7 +2,6 @@ package sandri.sandriweb.domain.user.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -55,6 +54,16 @@ public class User extends BaseEntity implements UserDetails {
     
     @Column(nullable = false)
     private boolean phoneVerified;
+    
+    @Enumerated(EnumType.STRING)
+    private TravelStyle travelStyle;
+    
+    @Column
+    private Double latitude;
+    
+    @Column
+    private Double longitude;
+    
     // UserDetails 구현
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -94,7 +103,20 @@ public class User extends BaseEntity implements UserDetails {
         this.phoneVerified = true;
     }
     
+    public void updateLocation(Double latitude, Double longitude) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+    }
+    
+    public void updateTravelStyle(TravelStyle travelStyle) {
+        this.travelStyle = travelStyle;
+    }
+    
     public enum Gender {
         MALE, FEMALE, OTHER
+    }
+    
+    public enum TravelStyle {
+        ADVENTURE, RELAXATION, CULTURE, NATURE, FOOD, SHOPPING
     }
 }

@@ -34,8 +34,13 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/api/auth/**").permitAll()
-                        .requestMatchers("/api/user/profile/**").permitAll()
+                        // OPTIONS 요청은 CORS preflight를 위해 허용
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // Swagger UI 경로 허용
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-resources/**", "/webjars/**").permitAll()
+                        // 인증 관련 API는 모두 허용
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/", "/api/user/profile/**").permitAll()
                         .requestMatchers("/api/common/**").permitAll()
                         // 리뷰 작성은 인증 필요 (더 구체적인 패턴을 먼저 선언)
                         .requestMatchers(HttpMethod.POST, "/api/places/*/reviews").authenticated()
@@ -46,7 +51,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").permitAll() // 관리자 API는 인증 없이 가능
                         .requestMatchers("/api/me/**").authenticated() // 마이페이지 관련 API는 인증 필요
                         .requestMatchers("/api/routes/share/**").permitAll()
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated()
                 )
@@ -64,15 +68,25 @@ public class SecurityConfig {
         
         return http.build();
     }
-    
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("*"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+
+        // 허용할 Origin 명시적으로 등록
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:5173",      // 로컬 프론트
+                "http://13.125.26.64:8080",   // Swagger 테스트
+                "https://sandri.site",// 실제 배포
+                "http://localhost:*"        // 로컬 테스트
+        ));
+
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
-        
+        configuration.setExposedHeaders(List.of("*"));
+        configuration.setMaxAge(3600L);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
