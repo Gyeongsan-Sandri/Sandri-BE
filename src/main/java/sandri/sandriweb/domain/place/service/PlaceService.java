@@ -131,7 +131,7 @@ public class PlaceService {
                             .name(nearbyPlace.getName())
                             .thumbnailUrl(thumbnailUrl)
                             .distanceInMeters(distance)
-                            .groupName(nearbyPlace.getGroup() != null ? nearbyPlace.getGroup().toString() : null)
+                            .categoryName(nearbyPlace.getCategory() != null ? nearbyPlace.getGroup().toString() : null)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -182,7 +182,7 @@ public class PlaceService {
                             .name(nearbyPlace.getName())
                             .thumbnailUrl(thumbnailUrl)
                             .distanceInMeters(distance)
-                            .groupName(nearbyPlace.getGroup() != null ? nearbyPlace.getGroup().toString() : null)
+                            .categoryName(nearbyPlace.getCategory() != null ? nearbyPlace.getGroup().toString() : null)
                             .build();
                 })
                 .collect(Collectors.toList());
