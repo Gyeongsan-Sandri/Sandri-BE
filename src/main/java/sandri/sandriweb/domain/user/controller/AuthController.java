@@ -10,9 +10,17 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.user.dto.*;
 import sandri.sandriweb.domain.user.service.UserService;
@@ -25,6 +33,7 @@ import sandri.sandriweb.domain.user.service.UserService;
 public class AuthController {
     
     private final UserService userService;
+    private final AuthenticationManager authenticationManager;
     
     @PostMapping("/login")
     @Operation(
@@ -58,15 +67,43 @@ public class AuthController {
             @ApiResponse(responseCode = "401", description = "인증 실패")
     })
     public ResponseEntity<ApiResponseDto<LoginResponseDto>> login(
-            @Valid @org.springframework.web.bind.annotation.RequestBody LoginRequestDto request) {
+            @Valid @org.springframework.web.bind.annotation.RequestBody LoginRequestDto request,
+            HttpServletRequest httpRequest) {
         
         log.info("로그인 시도: {}", request.getUsername());
-        ApiResponseDto<LoginResponseDto> response = userService.login(request);
         
-        if (response.isSuccess()) {
-            return ResponseEntity.ok(response);
-        } else {
-            return ResponseEntity.badRequest().body(response);
+        try {
+            // Spring Security 인증 수행
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getUsername(),
+                            request.getPassword()
+                    )
+            );
+            
+            // SecurityContext 생성 및 인증 정보 설정
+            SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+            securityContext.setAuthentication(authentication);
+            SecurityContextHolder.setContext(securityContext);
+            
+            // 세션 생성 및 SecurityContext 저장
+            HttpSession session = httpRequest.getSession(true);
+            session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext);
+            
+            log.info("세션 생성 완료: sessionId={}", session.getId());
+            
+            // UserService를 통해 응답 생성
+            ApiResponseDto<LoginResponseDto> response = userService.login(request);
+            
+            if (response.isSuccess()) {
+                return ResponseEntity.ok(response);
+            } else {
+                return ResponseEntity.badRequest().body(response);
+            }
+        } catch (Exception e) {
+            log.error("로그인 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("로그인에 실패했습니다: " + e.getMessage()));
         }
     }
     
