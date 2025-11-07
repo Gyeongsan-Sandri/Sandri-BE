@@ -12,6 +12,8 @@ import java.util.List;
 @Repository
 public interface PlaceRepository extends JpaRepository<Place, Long> {
 
+    boolean existsByName(String name);
+
     // 근처 장소 조회 (반경 내)
     // 참고: ST_Distance_Sphere는 MySQL/MariaDB용 함수입니다.
     // PostgreSQL을 사용하는 경우 ST_Distance와 ST_Transform을 사용하거나,
