@@ -102,8 +102,8 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:5173",      // 로컬 프론트
                 "http://13.125.26.64:8080",   // Swagger 테스트
-                "https://sandri.site",// 실제 배포
-                "http://localhost:*"        // 로컬 테스트
+                "https://sandri.site",        // 실제 배포
+                "https://api.sandri.site"     // 최종 배포 서버 (Swagger)
         ));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
