@@ -394,7 +394,7 @@ public class PlaceService {
                 .collect(Collectors.toList());
     }
     
-    /**
+    /*
      * 두 지점 간의 거리 계산 (Haversine 공식, 미터 단위)
      * @param point1 첫 번째 지점
      * @param point2 두 번째 지점

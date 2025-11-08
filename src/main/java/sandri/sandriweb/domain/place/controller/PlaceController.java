@@ -34,7 +34,7 @@ public class PlaceController {
 
     @GetMapping("/{placeId}")
     @Operation(summary = "관광지 상세 정보 조회", 
-               description = "관광지 상세페이지에서 호출합니다. " + "관광지의 기본 정보를 조회합니다. ID, 이름, 대분류, 카테고리, 평점, 주소, 위도/경도, 요약, 상세 정보, 공식 사진(리스트)을 반환합니다. " +
+               description = "관광지의 기본 정보를 조회합니다. 이름, 주소, 평점, 카테고리, 공식 사진을 반환합니다. " +
                            "리뷰 정보는 /api/places/{placeId}/reviews API를 별도로 호출하세요.")
     @ApiResponses(value = {
             @ApiResponse(
