@@ -75,7 +75,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").permitAll() // 관리자 API는 인증 없이 가능
                         // 루트 관련 API - 공유 링크는 인증 없이 가능 (더 구체적인 패턴을 먼저 선언)
                         .requestMatchers("/api/routes/share/**").permitAll() // 공유 링크는 인증 없이 가능
+                        .requestMatchers("/api/routes/search").permitAll() // 루트 검색은 인증 없이 가능
                         .requestMatchers("/api/routes/**").authenticated() // 나머지 루트 관련 API는 인증 필요
+                        // 검색 관련 API
+                        .requestMatchers("/api/popular-searches").permitAll() // 인기 검색어는 인증 없이 가능
+                        .requestMatchers("/api/categories").permitAll() // 카테고리 목록은 인증 없이 가능
                         // 사용자 관련 API - 닉네임으로 프로필 조회는 인증 없이 가능 (더 구체적인 패턴을 먼저 선언)
                         .requestMatchers("/api/user/profile/*").permitAll() // 닉네임으로 프로필 조회는 인증 없이 가능
                         .requestMatchers("/api/user/profile").authenticated() // 현재 사용자 프로필 조회는 인증 필요
