@@ -244,4 +244,40 @@ public class UserController {
             return ResponseEntity.badRequest().body(response);
         }
     }
+    
+    @PatchMapping("/nickname")
+    @Operation(
+            summary = "닉네임 수정",
+            description = "현재 로그인한 사용자의 닉네임을 수정합니다. 닉네임은 2-30자 사이여야 하며, 중복될 수 없습니다.",
+            requestBody = @RequestBody(
+                    description = "닉네임 수정 정보",
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = UpdateNicknameRequestDto.class),
+                            examples = @ExampleObject(
+                                    name = "닉네임 수정 예제",
+                                    value = "{\n  \"nickname\": \"새로운닉네임\"\n}"
+                            )
+                    )
+            )
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "수정 성공"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 (중복 닉네임, 현재 닉네임과 동일)"),
+            @ApiResponse(responseCode = "401", description = "인증 필요")
+    })
+    public ResponseEntity<ApiResponseDto<UserResponseDto>> updateNickname(
+            @Valid @org.springframework.web.bind.annotation.RequestBody UpdateNicknameRequestDto request,
+            Authentication authentication) {
+        
+        String username = authentication.getName();
+        log.info("닉네임 수정 요청: 사용자={}, 새 닉네임={}", username, request.getNickname());
+        ApiResponseDto<UserResponseDto> response = userService.updateNickname(username, request);
+        
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
 }
