@@ -4,20 +4,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import sandri.sandriweb.domain.user.repository.UserRepository;
 
 import java.util.List;
 
@@ -26,22 +21,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
     
-    private final UserRepository userRepository;
-    
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
-    }
-    
-    @Bean
-    public UserDetailsService userDetailsService() {
-        return username -> userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다: " + username));
-    }
-    
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
     }
     
     @Bean
@@ -58,7 +40,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-resources/**", "/webjars/**").permitAll()
                         // 인증 관련 API는 모두 허용
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/").permitAll()
+                        .requestMatchers("/", "/api/user/profile/**").permitAll()
                         .requestMatchers("/api/common/**").permitAll()
                         // 리뷰 작성은 인증 필요 (더 구체적인 패턴을 먼저 선언)
                         .requestMatchers(HttpMethod.POST, "/api/places/*/reviews").authenticated()
@@ -67,19 +49,12 @@ public class SecurityConfig {
                         .requestMatchers("/api/advertise/**").permitAll() // 광고 조회는 인증 없이 가능
                         .requestMatchers("/api/magazines/**").permitAll() // 매거진 조회는 인증 없이 가능
                         .requestMatchers("/api/admin/**").permitAll() // 관리자 API는 인증 없이 가능
-                        // 루트 관련 API - 공유 링크는 인증 없이 가능 (더 구체적인 패턴을 먼저 선언)
-                        .requestMatchers("/api/routes/share/**").permitAll() // 공유 링크는 인증 없이 가능
-                        .requestMatchers("/api/routes/**").authenticated() // 나머지 루트 관련 API는 인증 필요
-                        // 사용자 관련 API - 닉네임으로 프로필 조회는 인증 없이 가능 (더 구체적인 패턴을 먼저 선언)
-                        .requestMatchers("/api/user/profile/*").permitAll() // 닉네임으로 프로필 조회는 인증 없이 가능
-                        .requestMatchers("/api/user/profile").authenticated() // 현재 사용자 프로필 조회는 인증 필요
-                        .requestMatchers("/api/user/**").authenticated() // 나머지 사용자 관련 API는 인증 필요
                         .requestMatchers("/api/me/**").authenticated() // 마이페이지 관련 API는 인증 필요
+                        .requestMatchers("/api/routes/share/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)
                         .maximumSessions(1)
                         .maxSessionsPreventsLogin(false)
                 )
@@ -98,12 +73,11 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // 허용할 Origin 명시적으로 등록
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:5173",      // 로컬 프론트
-                "http://13.125.26.64:8080",   // Swagger 테스트
-                "https://sandri.site",// 실제 배포
-                "http://localhost:*"        // 로컬 테스트
+        // 허용할 Origin 패턴 (와일드카드 지원)
+        configuration.setAllowedOriginPatterns(List.of(
+                "http://localhost:*",          // 로컬 개발 (모든 포트)
+                "http://13.125.26.64:8080",    // Swagger 테스트
+                "https://sandri.site"          // 실제 배포
         ));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
