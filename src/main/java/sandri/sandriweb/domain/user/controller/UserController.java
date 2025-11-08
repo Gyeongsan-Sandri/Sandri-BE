@@ -16,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.user.dto.*;
+import sandri.sandriweb.domain.user.entity.User;
+import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.domain.user.service.UserService;
 
 @RestController
@@ -26,6 +28,7 @@ import sandri.sandriweb.domain.user.service.UserService;
 public class UserController {
     
     private final UserService userService;
+    private final UserRepository userRepository;
     
     @GetMapping("/profile")
     @Operation(summary = "사용자 프로필 조회", description = "현재 로그인한 사용자의 프로필 정보를 조회합니다")
@@ -36,15 +39,17 @@ public class UserController {
     })
     public ResponseEntity<ApiResponseDto<UserResponseDto>> getUserProfile(Authentication authentication) {
         
-        String nickname = authentication.getName();
-        log.info("사용자 프로필 조회: {}", nickname);
-        ApiResponseDto<UserResponseDto> response = userService.getUserProfile(nickname);
+        String username = authentication.getName();
+        log.info("사용자 프로필 조회: {}", username);
         
-        if (response.isSuccess()) {
-            return ResponseEntity.ok(response);
-        } else {
-            return ResponseEntity.notFound().build();
-        }
+        // username으로 User 조회
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+        
+        UserResponseDto userDto = UserResponseDto.from(user);
+        ApiResponseDto<UserResponseDto> response = ApiResponseDto.success(userDto);
+        
+        return ResponseEntity.ok(response);
     }
     
     @GetMapping("/profile/{nickname}")

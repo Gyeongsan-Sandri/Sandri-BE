@@ -204,8 +204,13 @@ public class RouteService {
                 throw new RuntimeException("일행 추가 권한이 없습니다");
             }
             
+            // userId 유효성 검증
+            if (request.getUserId() == null || request.getUserId() <= 0) {
+                throw new RuntimeException("유효하지 않은 사용자 ID입니다. 사용자 ID는 1 이상이어야 합니다.");
+            }
+            
             User participantUser = userRepository.findById(request.getUserId())
-                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+                    .orElseThrow(() -> new RuntimeException("사용자 ID " + request.getUserId() + "에 해당하는 사용자를 찾을 수 없습니다"));
             
             if (participantRepository.existsByRouteAndUser(route, participantUser)) {
                 throw new RuntimeException("이미 일행으로 등록된 사용자입니다");
