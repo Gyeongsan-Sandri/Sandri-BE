@@ -34,7 +34,7 @@ public class PlaceController {
 
     @GetMapping("/{placeId}")
     @Operation(summary = "관광지 상세 정보 조회", 
-               description = "관광지의 기본 정보를 조회합니다. 이름, 주소, 평점, 카테고리, 공식 사진을 반환합니다. " +
+               description = "관광지 상세페이지에서 호출합니다. " + "관광지의 기본 정보를 조회합니다. ID, 이름, 대분류, 카테고리, 평점, 주소, 위도/경도, 요약, 상세 정보, 공식 사진(리스트)을 반환합니다. " +
                            "리뷰 정보는 /api/places/{placeId}/reviews API를 별도로 호출하세요.")
     @ApiResponses(value = {
             @ApiResponse(
@@ -72,7 +72,7 @@ public class PlaceController {
 
     @GetMapping("/{placeId}/nearby")
     @Operation(summary = "근처 가볼만한 곳 조회", 
-               description = "특정 관광지 근처의 카테고리별 추천 장소 목록을 조회합니다.")
+               description = "지도 아래 주변 탐색 버튼을 눌렀을 때 출력할 관광지를 조회합니다." + "특정 관광지 근처의 추천 장소 목록을 대분류를 가리지 않고 조회합니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
@@ -81,12 +81,12 @@ public class PlaceController {
     public ResponseEntity<ApiResponseDto<List<NearbyPlaceDto>>> getNearbyPlaces(
             @Parameter(description = "관광지 ID", example = "1")
             @PathVariable Long placeId,
-            @Parameter(description = "카테고리 (관광지/맛집/카페)", example = "맛집")
+            @Parameter(description = "대분류 (관광지/맛집/카페)", example = "맛집")
             @RequestParam String group,
             @Parameter(description = "조회할 개수", example = "3")
             @RequestParam(defaultValue = "3") int count) {
 
-        log.info("근처 장소 조회: placeId={}, category={}, count={}", placeId, group, count);
+        log.info("근처 장소 조회: placeId={}, group={}, count={}", placeId, group, count);
 
         try {
             List<NearbyPlaceDto> response = placeService.getNearbyPlacesByPlaceId(placeId, group, count);
