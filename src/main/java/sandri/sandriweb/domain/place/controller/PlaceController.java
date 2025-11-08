@@ -34,7 +34,7 @@ public class PlaceController {
 
     @GetMapping("/{placeId}")
     @Operation(summary = "관광지 상세 정보 조회", 
-               description = "관광지 상세페이지에서 호출합니다. " + "관광지의 기본 정보를 조회합니다. ID, 이름, 대분류, 카테고리, 평점, 주소, 위도/경도, 요약, 상세 정보, 공식 사진(리스트)을 반환합니다. " +
+               description = "관광지의 기본 정보를 조회합니다. 이름, 주소, 평점, 카테고리, 공식 사진을 반환합니다. " +
                            "리뷰 정보는 /api/places/{placeId}/reviews API를 별도로 호출하세요.")
     @ApiResponses(value = {
             @ApiResponse(
@@ -71,13 +71,9 @@ public class PlaceController {
     }
 
     @GetMapping("/{placeId}/nearby")
-    @Operation(summary = "근처 가볼만한 곳 조회", 
-               description = "group 파라미터가 제공되면: 관광지 상세페이지 하단의 이 근처의 가볼만한 곳에서 호출하여 사용합니다. " +
-                             "현재 관광지에서 10km 이내이고 대분류에 속하는 관광지 중 좋아요가 높은 관광지 6개를 반환합니다. (근데 10km인 거 애매하긴 함. 수정 고려중.)" +
-                             "3개씩 출력하게 되어있을텐데 원래는 버튼 누를 때마다 API 호출해야 하지만 편의상 6개를 한 번에 받고 3개씩 출력해주세요. " +
-                             "이 방식이 곤란하면 변경 요청 가능. " +
-                             "group 파라미터가 없으면: 지도 아래 주변 탐색 버튼을 눌렀을 때 출력할 관광지를 조회합니다. " +
-                             "특정 관광지 근처의 추천 장소 목록을 대분류 필터 없이 전체에서 가까운 순으로 조회합니다. " +
+    @Operation(summary = "근처 가볼만한 곳 조회 (거리 순)", 
+               description = "지도 아래 주변 탐색 버튼을 눌렀을 때 출력할 관광지를 조회합니다. " +
+                             "특정 관광지 근처의 추천 장소 목록을 대분류 필터 없이 전체에서 가까운 순으로 조회합니다. count 값이 없을 시 기본값으로 조회함. (근데 거리 제한 있어야 하나 고민중임.)" +
                              "관광지 ID, 이름, 대표 사진 한 장, 위도/경도(지도 출력용), 현재 장소로부터 가까운 순위를 반환합니다. (0일 경우 현재 장소)")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
@@ -87,23 +83,53 @@ public class PlaceController {
     public ResponseEntity<ApiResponseDto<List<NearbyPlaceDto>>> getNearbyPlaces(
             @Parameter(description = "관광지 ID", example = "1")
             @PathVariable Long placeId,
-            @Parameter(description = "대분류 (관광지/맛집/카페, 선택사항)", example = "맛집")
-            @RequestParam(required = false) String group,
             @Parameter(description = "조회할 개수", example = "10")
             @RequestParam(defaultValue = "10") int count) {
 
-        log.info("근처 장소 조회: placeId={}, group={}, count={}", placeId, group, count);
+        log.info("근처 장소 조회 (거리 순): placeId={}, count={}", placeId, count);
 
         try {
-            if (group != null && !group.isEmpty()) {
-                // group 파라미터가 있으면 대분류별 조회 (좋아요 순)
-                List<NearbyPlaceDto> response = placeService.getNearbyPlacesByGroup(placeId, group, count);
-                return ResponseEntity.ok(ApiResponseDto.success(response));
-            } else {
-                // group 파라미터가 없으면 전체 조회 (거리 순)
-                List<NearbyPlaceDto> response = placeService.getNearbyPlaces(placeId, count);
-                return ResponseEntity.ok(ApiResponseDto.success(response));
+            List<NearbyPlaceDto> response = placeService.getNearbyPlaces(placeId, count);
+            return ResponseEntity.ok(ApiResponseDto.success(response));
+        } catch (RuntimeException e) {
+            log.error("근처 장소 조회 실패: {}", e.getMessage());
+            if (e.getMessage().contains("찾을 수 없습니다")) {
+                return ResponseEntity.status(404)
+                        .body(ApiResponseDto.error(e.getMessage()));
             }
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("근처 장소 조회 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("근처 장소를 조회하는 중 오류가 발생했습니다."));
+        }
+    }
+
+    @GetMapping("/{placeId}/nearby/group")
+    @Operation(summary = "근처 가볼만한 곳 조회 (대분류별, 좋아요 순)", 
+               description = "관광지 상세페이지 하단의 이 근처의 가볼만한 곳에서 호출하여 사용합니다. " +
+                             "현재 관광지에서 10km 이내이고 대분류에 속하는 관광지 중 좋아요가 높은 관광지 6개를 반환합니다. 예시에 count 값이 6으로 되어있는데 count 값이 없을 시 기본값으로 조회함. (근데 10km인 거 애매하긴 함. 수정 고려중.) " +
+                             "3개씩 출력하게 되어있을텐데 원래는 버튼 누를 때마다 API 호출해야 하지만 편의상 6개를 한 번에 받고 3개씩 출력해주세요. " +
+                             "이 방식이 곤란하면 변경 요청 가능.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "관광지 없음")
+    })
+    public ResponseEntity<ApiResponseDto<List<NearbyPlaceDto>>> getNearbyPlacesByGroup(
+            @Parameter(description = "관광지 ID", example = "1")
+            @PathVariable Long placeId,
+            @Parameter(description = "대분류 (관광지/맛집/카페)", example = "맛집")
+            @RequestParam String group,
+            @Parameter(description = "조회할 개수", example = "6")
+            @RequestParam(defaultValue = "6") int count) {
+
+        log.info("근처 장소 조회 (대분류별, 좋아요 순): placeId={}, group={}, count={}", placeId, group, count);
+
+        try {
+            List<NearbyPlaceDto> response = placeService.getNearbyPlacesByGroup(placeId, group, count);
+            return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (RuntimeException e) {
             log.error("근처 장소 조회 실패: {}", e.getMessage());
             if (e.getMessage().contains("찾을 수 없습니다")) {
@@ -156,7 +182,8 @@ public class PlaceController {
 
     @GetMapping("/simple")
     @Operation(summary = "전체 장소 목록 조회 (간단 정보)",
-               description = "전체 관광지의 ID와 이름만 반환합니다.")
+               description = "전체 관광지의 ID와 이름만 반환합니다." +
+                             "전체 DB 목록 확인용")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
