@@ -1,4 +1,4 @@
-package sandri.sandriweb.config;
+package sandri.sandriweb.global.config;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
