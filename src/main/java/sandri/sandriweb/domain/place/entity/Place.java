@@ -25,7 +25,7 @@ public class Place extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "name", nullable = false)
+    @Column(name = "name", nullable = false, unique = true)
     private String name;
 
     @Column(name = "address")
@@ -49,6 +49,9 @@ public class Place extends BaseEntity {
     @OneToMany(mappedBy = "place")
     List<PlaceReviewPhoto> reviewPhotos;
 
+    @OneToMany(mappedBy = "place")
+    List<PlaceOpenTime> openTimes;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "`group`", nullable = false)
     private PlaceCategory group; // 관광지/맛집/카페
@@ -64,5 +67,31 @@ public class Place extends BaseEntity {
 
     public Double getLongitude() {
         return location != null ? location.getX() : null;
+    }
+
+    // 장소 정보 업데이트 메서드
+    public void update(String name, String address, Point location, String summary, 
+                       String information, PlaceCategory group, Category category) {
+        if (name != null) {
+            this.name = name;
+        }
+        if (address != null) {
+            this.address = address;
+        }
+        if (location != null) {
+            this.location = location;
+        }
+        if (summary != null) {
+            this.summery = summary;
+        }
+        if (information != null) {
+            this.information = information;
+        }
+        if (group != null) {
+            this.group = group;
+        }
+        if (category != null) {
+            this.category = category;
+        }
     }
 }
