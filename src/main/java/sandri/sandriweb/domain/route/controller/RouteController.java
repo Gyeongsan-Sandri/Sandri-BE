@@ -73,10 +73,11 @@ public class RouteController {
         if (response.isSuccess()) {
             return ResponseEntity.ok(response);
         } else {
-            if (response.getMessage().contains("권한")) {
+            if (response.getMessage() != null && response.getMessage().contains("권한")) {
                 return ResponseEntity.status(403).body(response);
             }
-            return ResponseEntity.notFound().build();
+            // 루트를 찾을 수 없는 경우 404와 함께 에러 메시지 반환
+            return ResponseEntity.status(404).body(response);
         }
     }
     
@@ -156,10 +157,13 @@ public class RouteController {
     }
     
     @PostMapping("/{routeId}/participants")
-    @Operation(summary = "일행 추가", description = "루트에 일행을 추가합니다")
+    @Operation(
+            summary = "일행 추가", 
+            description = "루트에 일행을 추가합니다. 사용자 ID는 /api/user/profile API를 통해 확인할 수 있습니다."
+    )
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "추가 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청 (사용자 ID가 0이거나 존재하지 않음)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "권한 없음")
     })
     public ResponseEntity<ApiResponseDto<RouteResponseDto>> addParticipant(

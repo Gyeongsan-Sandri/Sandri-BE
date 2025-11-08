@@ -20,6 +20,9 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     operationsSorter: method
+    tryItOutEnabled: true
+    persistAuthorization: true
+    withCredentials: true
 
 google:
   maps:
