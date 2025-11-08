@@ -41,6 +41,9 @@ public class SwaggerConfig {
                                 .url("http://13.125.26.64:8080")
                                 .description("배포 서버 (현재)"),
                         new Server()
+                                .url("https://api.sandri.site")
+                                .description("최종 배포 서버"),
+                        new Server()
                                 .url("https://sandri.site")
                                 .description("운영 서버 (도메인 적용 후)")
                 ))
