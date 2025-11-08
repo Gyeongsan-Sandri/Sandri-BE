@@ -38,6 +38,16 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
                                   @Param("excludeId") Long excludeId,
                                   @Param("limit") int limit);
     
+    // 근처 장소 조회 (반경 제한 없음, 가까운 순으로 정렬, 현재 장소 포함)
+    // 참고: ST_Distance_Sphere는 MySQL/MariaDB용 함수입니다.
+    @Query(value = "SELECT p.* FROM places p " +
+            "WHERE p.enabled = true " +
+            "AND p.location IS NOT NULL " +
+            "ORDER BY ST_Distance_Sphere(p.location, :center) ASC " +
+            "LIMIT :limit", nativeQuery = true)
+    List<Place> findNearestPlaces(@Param("center") Point center,
+                                   @Param("limit") int limit);
+    
     // 카테고리별 근처 장소 조회 (반경 내) - group 기준 (관광지/맛집/카페)
     @Query(value = "SELECT p.* FROM places p " +
             "WHERE ST_Distance_Sphere(p.location, :center) <= :radius " +
@@ -51,6 +61,24 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
                                            @Param("excludeId") Long excludeId,
                                            @Param("categoryName") String categoryName,
                                            @Param("limit") int limit);
+    
+    // 대분류별 근처 장소 조회 (반경 내, 좋아요 많은 순) - group 기준 (관광지/맛집/카페)
+    @Query(value = "SELECT p.* FROM places p " +
+            "LEFT JOIN (SELECT place_id, COUNT(*) as like_count " +
+            "           FROM place_likes " +
+            "           WHERE enabled = true " +
+            "           GROUP BY place_id) AS likes ON p.place_id = likes.place_id " +
+            "WHERE ST_Distance_Sphere(p.location, :center) <= :radius " +
+            "AND p.place_id != :excludeId " +
+            "AND p.enabled = true " +
+            "AND p.`group` = :groupName " +
+            "ORDER BY COALESCE(likes.like_count, 0) DESC, p.created_at DESC " +
+            "LIMIT :limit", nativeQuery = true)
+    List<Place> findNearbyPlacesByGroupOrderByLikeCount(@Param("center") Point center,
+                                                         @Param("radius") double radius,
+                                                         @Param("excludeId") Long excludeId,
+                                                         @Param("groupName") String groupName,
+                                                         @Param("limit") int limit);
 
     /**
      * 카테고리별 장소 조회 (좋아요 많은 순)
