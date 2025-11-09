@@ -10,8 +10,10 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(description = "카테고리별 장소 응답 DTO")
-public class CategoryPlaceDto {
+@Schema(description = "장소 간단 정보 응답 DTO" +
+                      "카테고리 목록 반환, 추천 장소 목록 반환 등" +
+                      "공통 정보를 담은 DTO이므로 API에 명세한 꺼내서 사용 바람")
+public class SimplePlaceDto {
     
     @Schema(description = "장소 ID", example = "1")
     private Long placeId;
@@ -25,12 +27,6 @@ public class CategoryPlaceDto {
     @Schema(description = "대표 사진 한 장", example = "https://s3.../photo.jpg")
     private String thumbnailUrl;
     
-    @Schema(description = "평점", example = "4.5")
-    private Double rating;
-    
-    @Schema(description = "좋아요 개수", example = "120")
-    private Integer likeCount;
-    
     @Schema(description = "사용자가 좋아요한 장소인지 여부 (로그인한 경우에만 설정)", example = "true")
     private Boolean isLiked;
     
@@ -39,5 +35,8 @@ public class CategoryPlaceDto {
     
     @Schema(description = "세부 카테고리 이름", example = "역사/전통")
     private String categoryName;
+    
+    @Schema(description = "기준 장소와의 거리 (미터 단위, 거리 계산이 필요한 경우에만 설정)", example = "2500")
+    private Long distanceInMeters;
 }
 

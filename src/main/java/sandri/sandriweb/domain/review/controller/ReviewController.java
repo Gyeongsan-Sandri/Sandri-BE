@@ -11,7 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import sandri.sandriweb.domain.place.dto.CursorResponseDto;
+import sandri.sandriweb.domain.review.dto.CursorResponseDto;
 import sandri.sandriweb.domain.review.dto.PageResponseDto;
 import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.review.dto.CreateReviewRequestDto;

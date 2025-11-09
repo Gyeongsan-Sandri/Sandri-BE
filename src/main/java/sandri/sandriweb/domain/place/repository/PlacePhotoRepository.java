@@ -55,6 +55,22 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
     List<Object[]> findFirstPhotoUrlByPlaceIdWithCursor(@Param("lastPlaceId") Long lastPlaceId, Pageable pageable);
     
     /*
+     * 여러 장소의 첫 번째 사진 정보 조회 (개수 제한)
+     * 윈도우 함수를 사용하여 한 번의 테이블 스캔으로 처리 (효율적)
+     * @param limit 조회할 개수
+     * @return [placeId, photoUrl] 형태의 Object[] 리스트
+     */
+    @Query(value = "SELECT pp.place_id, pp.photo_url FROM ( " +
+           "    SELECT pp.place_id, pp.photo_url, " +
+           "           ROW_NUMBER() OVER (PARTITION BY pp.place_id ORDER BY pp.`order` ASC) as rn " +
+           "    FROM place_photos pp " +
+           "    WHERE pp.enabled = true " +
+           ") pp WHERE pp.rn = 1 " +
+           "ORDER BY pp.place_id ASC " +
+           "LIMIT :limit", nativeQuery = true)
+    List<Object[]> findFirstPhotoUrlByPlaceIdLimit(@Param("limit") int limit);
+    
+    /*
      * 특정 장소의 최대 order 값 조회 (새 사진 추가 시 order 계산용)
      */
     @Query("SELECT COALESCE(MAX(pp.order), -1) FROM PlacePhoto pp WHERE pp.place.id = :placeId AND pp.enabled = true")
