@@ -107,6 +107,7 @@ public class SecurityConfig {
         // 허용할 Origin 명시적으로 등록
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:5173",      // 로컬 프론트
+                "https://localhost:5173",     // 로컬 프론트 (HTTPS)
                 "http://13.125.26.64:8080",   // Swagger 테스트
                 "https://sandri.site",        // 실제 배포
                 "https://api.sandri.site"     // 최종 배포 서버 (Swagger)
