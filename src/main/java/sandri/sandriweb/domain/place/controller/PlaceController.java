@@ -180,7 +180,7 @@ public class PlaceController {
         }
     }
 
-    @GetMapping("/simple")
+    @GetMapping("/list")
     @Operation(summary = "전체 장소 목록 조회 (간단 정보)",
                description = "전체 관광지의 ID와 이름만 반환합니다." +
                              "전체 DB 목록 확인용")

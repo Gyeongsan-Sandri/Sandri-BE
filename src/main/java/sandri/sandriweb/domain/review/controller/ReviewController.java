@@ -121,7 +121,7 @@ public class ReviewController {
         }
     }
 
-    @PostMapping("/me/files")
+    @PostMapping("/api/me/files")
     @Operation(summary = "Presigned URL 발급 (리뷰 사진/영상 업로드용)", 
                description = "리뷰 작성 및 수정 페이지에서 리뷰 업로드 전 호출합니다. " +
                              "프론트엔드에서 선택한 파일들의 파일명, order, Content-Type을 전송하면, " +
@@ -194,7 +194,7 @@ public class ReviewController {
         }
     }
 
-    @PostMapping("/me/places/{placeId}")
+    @PostMapping("/api/places/{placeId}/reviews")
     @Operation(summary = "리뷰 작성", 
                description = "리뷰 작성 및 수정 페이지에서 리뷰 업로드 시 호출합니다." +
                              "별점, 리뷰 내용, 사진(순서, finalUrl)을 전송하면 리뷰를 작성하고 작성한 리뷰 ID를 반환합니다. " +
