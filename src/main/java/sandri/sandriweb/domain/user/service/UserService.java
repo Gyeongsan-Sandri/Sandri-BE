@@ -284,4 +284,35 @@ public class UserService {
             return ApiResponseDto.error("중복 확인 중 오류가 발생했습니다");
         }
     }
+    
+    /**
+     * 닉네임 수정
+     */
+    @Transactional
+    public ApiResponseDto<UserResponseDto> updateNickname(String username, UpdateNicknameRequestDto request) {
+        try {
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+            
+            // 현재 닉네임과 동일한지 확인
+            if (user.getNickname().equals(request.getNickname())) {
+                throw new RuntimeException("현재 닉네임과 동일합니다");
+            }
+            
+            // 닉네임 중복 확인
+            if (userRepository.existsByNickname(request.getNickname())) {
+                throw new RuntimeException("이미 사용 중인 닉네임입니다");
+            }
+            
+            user.updateNickname(request.getNickname());
+            User savedUser = userRepository.save(user);
+            
+            UserResponseDto userDto = UserResponseDto.from(savedUser);
+            return ApiResponseDto.success("닉네임이 수정되었습니다", userDto);
+            
+        } catch (Exception e) {
+            log.error("닉네임 수정 실패: {}", e.getMessage());
+            return ApiResponseDto.error(e.getMessage());
+        }
+    }
 }

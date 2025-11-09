@@ -1,6 +1,8 @@
 package sandri.sandriweb.domain.place.repository;
 
 import org.locationtech.jts.geom.Point;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,6 +15,13 @@ import java.util.List;
 public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     boolean existsByName(String name);
+    
+    /**
+     * 이름으로 장소 조회
+     * @param name 장소 이름
+     * @return 장소 (없으면 Optional.empty())
+     */
+    java.util.Optional<Place> findByName(String name);
 
     // 근처 장소 조회 (반경 내)
     // 참고: ST_Distance_Sphere는 MySQL/MariaDB용 함수입니다.
@@ -29,6 +38,16 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
                                   @Param("excludeId") Long excludeId,
                                   @Param("limit") int limit);
     
+    // 근처 장소 조회 (반경 제한 없음, 가까운 순으로 정렬, 현재 장소 포함)
+    // 참고: ST_Distance_Sphere는 MySQL/MariaDB용 함수입니다.
+    @Query(value = "SELECT p.* FROM places p " +
+            "WHERE p.enabled = true " +
+            "AND p.location IS NOT NULL " +
+            "ORDER BY ST_Distance_Sphere(p.location, :center) ASC " +
+            "LIMIT :limit", nativeQuery = true)
+    List<Place> findNearestPlaces(@Param("center") Point center,
+                                   @Param("limit") int limit);
+    
     // 카테고리별 근처 장소 조회 (반경 내) - group 기준 (관광지/맛집/카페)
     @Query(value = "SELECT p.* FROM places p " +
             "WHERE ST_Distance_Sphere(p.location, :center) <= :radius " +
@@ -42,6 +61,24 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
                                            @Param("excludeId") Long excludeId,
                                            @Param("categoryName") String categoryName,
                                            @Param("limit") int limit);
+    
+    // 대분류별 근처 장소 조회 (반경 내, 좋아요 많은 순) - group 기준 (관광지/맛집/카페)
+    @Query(value = "SELECT p.* FROM places p " +
+            "LEFT JOIN (SELECT place_id, COUNT(*) as like_count " +
+            "           FROM place_likes " +
+            "           WHERE enabled = true " +
+            "           GROUP BY place_id) AS likes ON p.place_id = likes.place_id " +
+            "WHERE ST_Distance_Sphere(p.location, :center) <= :radius " +
+            "AND p.place_id != :excludeId " +
+            "AND p.enabled = true " +
+            "AND p.`group` = :groupName " +
+            "ORDER BY COALESCE(likes.like_count, 0) DESC, p.created_at DESC " +
+            "LIMIT :limit", nativeQuery = true)
+    List<Place> findNearbyPlacesByGroupOrderByLikeCount(@Param("center") Point center,
+                                                         @Param("radius") double radius,
+                                                         @Param("excludeId") Long excludeId,
+                                                         @Param("groupName") String groupName,
+                                                         @Param("limit") int limit);
 
     /**
      * 카테고리별 장소 조회 (좋아요 많은 순)
@@ -60,4 +97,36 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
            "LIMIT :limit", nativeQuery = true)
     List<Place> findByCategoryOrderByLikeCountDesc(@Param("categoryName") String categoryName,
                                                     @Param("limit") int limit);
+
+    /**
+     * 키워드로 장소 검색 (이름, 주소, 요약 정보에서 검색)
+     * @param keyword 검색 키워드
+     * @param pageable 페이징 정보
+     * @return 검색 결과
+     */
+    @Query("SELECT DISTINCT p FROM Place p " +
+           "WHERE p.enabled = true " +
+           "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "     OR LOWER(p.address) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "     OR LOWER(p.summery) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           "ORDER BY p.name ASC")
+    Page<Place> searchByKeyword(@Param("keyword") String keyword, Pageable pageable);
+
+    /**
+     * 키워드로 장소 검색 (카테고리 필터 포함)
+     * @param keyword 검색 키워드
+     * @param category 카테고리 (선택사항)
+     * @param pageable 페이징 정보
+     * @return 검색 결과
+     */
+    @Query("SELECT DISTINCT p FROM Place p " +
+           "WHERE p.enabled = true " +
+           "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "     OR LOWER(p.address) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "     OR LOWER(p.summery) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           "AND (:category IS NULL OR p.category = :category) " +
+           "ORDER BY p.name ASC")
+    Page<Place> searchByKeywordAndCategory(@Param("keyword") String keyword,
+                                           @Param("category") String category,
+                                           Pageable pageable);
 }

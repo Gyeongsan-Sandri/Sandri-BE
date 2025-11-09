@@ -112,6 +112,10 @@ public class User extends BaseEntity implements UserDetails {
         this.travelStyle = travelStyle;
     }
     
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
+    }
+    
     public enum Gender {
         MALE, FEMALE, OTHER
     }
