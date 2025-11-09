@@ -39,7 +39,8 @@ public class ReviewController {
 
     @GetMapping("/api/places/{placeId}/reviews")
     @Operation(summary = "리뷰 목록 조회 (커서 기반 페이징)", 
-               description = "관광지의 리뷰 목록을 커서 기반으로 페이징하여 조회합니다. 마지막으로 조회한 리뷰 ID를 기준으로 다음 페이지를 가져옵니다.")
+               description = "관광지 상세 페이지에서 호출합니다." +
+                             "관광지의 리뷰 목록을 커서 기반으로 페이징하여 조회합니다. 마지막으로 조회한 리뷰 ID(생략 시 찻 리뷰)를 기준으로 다음 페이지를 가져옵니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),

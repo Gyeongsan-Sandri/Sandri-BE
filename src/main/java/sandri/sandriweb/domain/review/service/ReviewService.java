@@ -192,8 +192,11 @@ public class ReviewService {
                 break;
         }
         
+        // 총 리뷰 개수 조회
+        Long totalCount = placeReviewRepository.countByPlaceId(placeId);
+        
         // 커서 기반 페이징 처리
-        return buildCursorResponse(allReviews, size, ReviewDto::from, PlaceReview::getId);
+        return buildCursorResponse(allReviews, size, ReviewDto::from, PlaceReview::getId, totalCount);
     }
 
     /**
@@ -211,7 +214,7 @@ public class ReviewService {
         List<PlaceReviewPhoto> allPhotos = placeReviewPhotoRepository.findByPlaceIdWithCursor(placeId, lastPhotoId, pageable);
         
         // 커서 기반 페이징 처리
-        return buildCursorResponse(allPhotos, size, PlaceReviewPhoto::getPhotoUrl, PlaceReviewPhoto::getId);
+        return buildCursorResponse(allPhotos, size, PlaceReviewPhoto::getPhotoUrl, PlaceReviewPhoto::getId, null);
     }
 
     /**
@@ -311,7 +314,7 @@ public class ReviewService {
         List<PlaceReview> allReviews = placeReviewRepository.findReviewsByUserIdOrderByLatestWithCursor(userId, lastReviewId, pageable);
 
         // 커서 기반 페이징 처리
-        return buildCursorResponse(allReviews, size, ReviewDto::from, PlaceReview::getId);
+        return buildCursorResponse(allReviews, size, ReviewDto::from, PlaceReview::getId, null);
     }
 
     /**
@@ -320,13 +323,15 @@ public class ReviewService {
      * @param size 요청한 페이지 크기
      * @param mapper 아이템을 DTO로 변환하는 함수
      * @param idExtractor 아이템의 ID를 추출하는 함수 (커서용)
+     * @param totalCount 전체 개수 (선택사항, 리뷰 목록 조회 시에만 사용)
      * @return 커서 기반 페이징 응답
      */
     private <T, D> CursorResponseDto<D> buildCursorResponse(
             List<T> allItems,
             int size,
             Function<T, D> mapper,
-            Function<T, Long> idExtractor) {
+            Function<T, Long> idExtractor,
+            Long totalCount) {
         
         // size + 1개를 확인하여 다음 페이지 존재 여부 판단
         boolean hasNext = allItems.size() > size;
@@ -351,6 +356,7 @@ public class ReviewService {
                 .size(size)
                 .nextCursor(nextCursor)
                 .hasNext(hasNext)
+                .totalCount(totalCount)
                 .build();
     }
 
