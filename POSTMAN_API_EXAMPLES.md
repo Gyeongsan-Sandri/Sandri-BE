@@ -62,8 +62,14 @@ GET http://localhost:8080/api/places/1
     "summary": "신라 불교 문화의 정수를 보여주는 사찰",
     "information": "불국사는 신라 경덕왕 10년(751)에 김대성이 창건을 시작하여...",
     "officialPhotos": [
-      "https://s3.../photo1.jpg",
-      "https://s3.../photo2.jpg"
+      {
+        "order": 0,
+        "photoUrl": "https://s3.../photo1.jpg"
+      },
+      {
+        "order": 1,
+        "photoUrl": "https://s3.../photo2.jpg"
+      }
     ]
   }
 }
@@ -313,7 +319,7 @@ GET http://localhost:8080/api/places/1/reviews/photos?lastPhotoId=123&size=20
 
 ### 3.3 Presigned URL 발급 (리뷰 사진/영상 업로드용)
 ```
-POST http://localhost:8080/api/me/reviews/files/presigned
+POST http://localhost:8080/api/me/files
 Content-Type: application/json
 
 {
@@ -361,22 +367,74 @@ Content-Type: application/json
 **프론트엔드 업로드 워크플로우:**
 
 1. **Presigned URL 발급** (위 API 호출)
-2. **각 Presigned URL로 파일 업로드** (PUT 요청):
+   - 백엔드에 파일명과 contentType을 전송
+   - 백엔드가 각 파일에 대한 Presigned URL과 finalUrl을 반환
+
+2. **각 Presigned URL로 S3에 직접 파일 업로드** (PUT 요청, **백엔드를 거치지 않음**):
    ```javascript
-   // 각 파일에 대해
-   await fetch(presignedUrl, {
-     method: 'PUT',
-     headers: {
-       'Content-Type': fileInfo.contentType  // 발급 요청 시 보낸 contentType
-     },
-     body: file  // File 객체
+   // 각 파일에 대해 Presigned URL로 직접 S3에 업로드
+   const files = [file1, file2]; // File 객체들
+   const fileInfos = files.map(file => ({
+     fileName: file.name,
+     contentType: file.type  // 예: "image/jpeg", "image/png"
+   }));
+   
+   // 1단계: Presigned URL 발급
+   const response = await fetch('/api/me/files', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({ files: fileInfos })
    });
+   const { data } = await response.json();
+   
+   // 2단계: 각 파일을 S3에 직접 업로드
+   for (let i = 0; i < files.length; i++) {
+     const file = files[i];
+     const presignedUrlData = data.presignedUrls[i];
+     const contentType = fileInfos[i].contentType;  // 발급 요청 시 보낸 contentType 사용
+     
+     // Presigned URL로 PUT 요청 (백엔드 서버를 거치지 않고 S3에 직접 업로드)
+     const uploadResponse = await fetch(presignedUrlData.presignedUrl, {
+       method: 'PUT',
+       headers: {
+         'Content-Type': contentType  // 발급 요청 시 보낸 contentType과 동일해야 함
+       },
+       body: file  // File 객체 (Blob)
+     });
+     
+     if (!uploadResponse.ok) {
+       throw new Error(`파일 업로드 실패: ${file.name}`);
+     }
+     
+     // ⚠️ 중요: S3는 업로드 성공 시 HTTP 200만 반환합니다 (body 없음)
+     // finalUrl은 1단계에서 이미 받았으므로, 여기서는 업로드 성공 여부만 확인하면 됩니다
+   }
    ```
+
 3. **리뷰 작성 시 finalUrl 사용**:
    ```javascript
-   const finalUrls = presignedUrls.map(item => item.finalUrl);
-   // 리뷰 작성 API에 finalUrls를 photoUrls로 전송
+   // 업로드 완료 후 finalUrl을 추출하여 리뷰 작성 API에 전송
+   const finalUrls = response.data.presignedUrls.map(item => item.finalUrl);
+   
+   // 리뷰 작성 API 호출
+   await fetch('/api/places/1/reviews', {
+     method: 'POST',
+     headers: {
+       'Content-Type': 'application/json'
+     },
+     body: JSON.stringify({
+       rating: 5,
+       content: "정말 좋은 장소였습니다!",
+       photoUrls: finalUrls  // S3에 업로드된 파일의 최종 URL
+     })
+   });
    ```
+
+**⚠️ 중요 사항:**
+- Presigned URL은 **임시 URL**이며, 보통 5분 정도의 유효 기간이 있습니다.
+- 파일 업로드는 **백엔드 서버를 거치지 않고** 프론트엔드에서 **S3에 직접** 업로드됩니다.
+- 업로드 시 `Content-Type` 헤더는 Presigned URL 발급 시 전송한 `contentType`과 동일해야 합니다.
+
 
 ### 3.4 리뷰 작성
 ```

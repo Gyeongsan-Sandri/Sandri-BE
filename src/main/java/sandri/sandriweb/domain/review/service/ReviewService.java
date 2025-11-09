@@ -213,8 +213,11 @@ public class ReviewService {
         
         List<PlaceReviewPhoto> allPhotos = placeReviewPhotoRepository.findByPlaceIdWithCursor(placeId, lastPhotoId, pageable);
         
+        // 총 리뷰 사진 개수 조회
+        Long totalCount = placeReviewPhotoRepository.countByPlaceId(placeId);
+        
         // 커서 기반 페이징 처리
-        return buildCursorResponse(allPhotos, size, PlaceReviewPhoto::getPhotoUrl, PlaceReviewPhoto::getId, null);
+        return buildCursorResponse(allPhotos, size, PlaceReviewPhoto::getPhotoUrl, PlaceReviewPhoto::getId, totalCount);
     }
 
     /**
