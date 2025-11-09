@@ -18,6 +18,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.session.web.http.CookieSerializer;
+import org.springframework.session.web.http.DefaultCookieSerializer;
 import sandri.sandriweb.domain.user.repository.UserRepository;
 
 import java.util.List;
@@ -111,8 +113,10 @@ public class SecurityConfig {
         // 허용할 Origin 명시적으로 등록
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:5173",      // 로컬 프론트
+                "https://localhost:5173",     // 로컬 프론트 (HTTPS)
                 "http://13.125.26.64:8080",   // Swagger 테스트
                 "https://sandri.site",        // 실제 배포
+                "https://www.sandri.site",        // 실제 배포
                 "https://api.sandri.site"     // 최종 배포 서버 (Swagger)
         ));
 
@@ -125,5 +129,15 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    @Bean
+    public CookieSerializer cookieSerializer() {
+        DefaultCookieSerializer serializer = new DefaultCookieSerializer();
+        serializer.setCookieName("JSESSIONID");
+        serializer.setSameSite("None");
+        serializer.setUseSecureCookie(true); // HTTPS 환경에서만 쿠키 전송
+        serializer.setUseHttpOnlyCookie(true); // XSS 공격 방지
+        return serializer;
     }
 }
