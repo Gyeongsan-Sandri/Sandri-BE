@@ -18,6 +18,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.session.web.http.CookieSerializer;
+import org.springframework.session.web.http.DefaultCookieSerializer;
 import sandri.sandriweb.domain.user.repository.UserRepository;
 
 import java.util.List;
@@ -127,5 +129,15 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    @Bean
+    public CookieSerializer cookieSerializer() {
+        DefaultCookieSerializer serializer = new DefaultCookieSerializer();
+        serializer.setCookieName("JSESSIONID");
+        serializer.setSameSite("None");
+        serializer.setUseSecureCookie(true); // HTTPS 환경에서만 쿠키 전송
+        serializer.setUseHttpOnlyCookie(true); // XSS 공격 방지
+        return serializer;
     }
 }

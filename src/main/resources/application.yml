@@ -1,4 +1,9 @@
 spring:
+  session:
+    cookie:
+      same-site: none
+      secure: true
+      http-only: true
   jpa:
     hibernate:
       ddl-auto: update  # 처음 시작 시: create, 이후: update, 운영: validate 또는 none
