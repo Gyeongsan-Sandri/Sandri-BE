@@ -12,7 +12,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import sandri.sandriweb.domain.review.dto.CursorResponseDto;
-import sandri.sandriweb.domain.review.dto.PageResponseDto;
 import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.review.dto.CreateReviewRequestDto;
 import sandri.sandriweb.domain.review.dto.GetPresignedUrlsResponseDto;
@@ -221,7 +220,7 @@ public class ReviewController {
             User user = userRepository.findByUsername(username)
                     .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
 
-            Long reviewId = reviewService.createReview(user.getId(), placeId, request);
+            Long reviewId = reviewService.createReview(user, placeId, request);
             return ResponseEntity.ok(ApiResponseDto.success(reviewId));
         } catch (RuntimeException e) {
             log.error("리뷰 작성 실패: {}", e.getMessage());

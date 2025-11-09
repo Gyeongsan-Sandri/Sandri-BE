@@ -13,9 +13,6 @@ import java.util.List;
 public interface PlaceReviewPhotoRepository extends JpaRepository<PlaceReviewPhoto, Long> {
     
     List<PlaceReviewPhoto> findByPlaceReviewId(Long placeReviewId);
-    
-    @Query("SELECT p FROM PlaceReviewPhoto p WHERE p.place.id = :placeId ORDER BY p.createdAt DESC")
-    List<PlaceReviewPhoto> findByPlaceId(@Param("placeId") Long placeId);
 
     // 커서 기반 페이징 - 최신순 (createdAt DESC, id DESC)
     @Query("SELECT p FROM PlaceReviewPhoto p " +

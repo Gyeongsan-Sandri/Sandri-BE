@@ -2,13 +2,11 @@ package sandri.sandriweb.domain.review.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sandri.sandriweb.domain.review.dto.CursorResponseDto;
-import sandri.sandriweb.domain.review.dto.PageResponseDto;
 import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
@@ -23,9 +21,7 @@ import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.global.service.S3Service;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -42,20 +38,16 @@ public class ReviewService {
 
     /**
      * 리뷰 작성
-     * @param userId 사용자 ID
+     * @param user 사용자 엔티티 (컨트롤러에서 조회하여 전달)
      * @param placeId 장소 ID
      * @param request 리뷰 작성 요청 DTO
      * @return 작성된 리뷰 ID
      */
     @Transactional
-    public Long createReview(Long userId, Long placeId, CreateReviewRequestDto request) {
+    public Long createReview(User user, Long placeId, CreateReviewRequestDto request) {
         // Place 조회
         Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
-
-        // User 조회
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
 
         // TODO: 방문 기록 테이블에서 visitDate 가져오기 (나중에 방문 기록 테이블 연동 시)
         // LocalDate visitDate = visitRecordRepository.findByUserIdAndPlaceId(userId, placeId)
@@ -88,7 +80,7 @@ public class ReviewService {
             photos = placeReviewPhotoRepository.saveAll(photos);
         }
 
-        log.info("리뷰 작성 완료: reviewId={}, userId={}, placeId={}", savedReview.getId(), userId, placeId);
+        log.info("리뷰 작성 완료: reviewId={}, userId={}, placeId={}", savedReview.getId(), user.getId(), placeId);
 
         // 리뷰 ID만 반환
         return savedReview.getId();
@@ -103,8 +95,8 @@ public class ReviewService {
      */
     @Transactional
     public Long updateReview(Long userId, Long reviewId, UpdateReviewRequestDto request) {
-        // 리뷰 조회 및 소유자 확인
-        PlaceReview review = placeReviewRepository.findById(reviewId)
+        // 리뷰 조회 및 소유자 확인 (사용자 및 장소 정보 포함하여 N+1 방지)
+        PlaceReview review = placeReviewRepository.findByIdWithUserAndPlace(reviewId)
                 .orElseThrow(() -> new RuntimeException("리뷰를 찾을 수 없습니다."));
 
         if (!review.getUser().getId().equals(userId)) {
@@ -149,10 +141,11 @@ public class ReviewService {
      */
     @Transactional
     public void deleteReview(Long userId, Long reviewId) {
-        // 리뷰 조회 및 소유자 확인
-        PlaceReview review = placeReviewRepository.findById(reviewId)
+        // 리뷰 조회 및 소유자 확인 (사용자 정보 포함하여 N+1 방지)
+        PlaceReview review = placeReviewRepository.findByIdWithUserAndPlace(reviewId)
                 .orElseThrow(() -> new RuntimeException("리뷰를 찾을 수 없습니다."));
-
+        
+        // 권한 확인
         if (!review.getUser().getId().equals(userId)) {
             throw new RuntimeException("리뷰를 삭제할 권한이 없습니다.");
         }
@@ -235,36 +228,6 @@ public class ReviewService {
     }
 
     /**
-     * 리뷰 목록 조회 (정렬 옵션 포함, 상세 정보용)
-     * @param placeId 관광지 ID
-     * @param count 조회할 개수
-     * @param sort 정렬 기준
-     * @return 리뷰 DTO 리스트
-     */
-    @Transactional(readOnly = true)
-    public List<ReviewDto> getReviewsByPlaceId(Long placeId, int count, String sort) {
-        // 정렬 옵션에 따라 다른 메서드 호출
-        List<PlaceReview> reviews;
-        switch (sort) {
-            case "rating_high":
-                reviews = placeReviewRepository.findReviewsByPlaceIdOrderByRatingDesc(placeId);
-                break;
-            case "rating_low":
-                reviews = placeReviewRepository.findReviewsByPlaceIdOrderByRatingAsc(placeId);
-                break;
-            case "latest":
-            default:
-                reviews = placeReviewRepository.findReviewsByPlaceIdOrderByLatest(placeId);
-                break;
-        }
-        
-        return reviews.stream()
-                .limit(count)
-                .map(ReviewDto::from)
-                .collect(Collectors.toList());
-    }
-
-    /**
      * 평균 평점 조회
      * @param placeId 관광지 ID
      * @return 평균 평점
@@ -273,26 +236,6 @@ public class ReviewService {
     public Double getAverageRating(Long placeId) {
         Double averageRating = placeReviewRepository.findAverageRatingByPlaceId(placeId);
         return averageRating != null ? averageRating : 0.0;
-    }
-
-    /**
-     * 여러 장소의 평균 평점을 한 번에 조회 (배치 조회)
-     * @param placeIds 장소 ID 목록
-     * @return Place ID를 키로, 평균 평점을 값으로 하는 Map
-     */
-    @Transactional(readOnly = true)
-    public Map<Long, Double> getAverageRatingsByPlaceIds(List<Long> placeIds) {
-        if (placeIds == null || placeIds.isEmpty()) {
-            return new HashMap<>();
-        }
-        
-        List<Object[]> results = placeReviewRepository.findAverageRatingsByPlaceIds(placeIds);
-        
-        return results.stream()
-                .collect(Collectors.toMap(
-                        result -> (Long) result[0],
-                        result -> result[1] != null ? ((Double) result[1]) : 0.0
-                ));
     }
 
     /**
@@ -377,23 +320,5 @@ public class ReviewService {
                 .build();
     }
 
-    /**
-     * 리뷰에 연결된 사진 삭제 (S3 및 DB에서 삭제)
-     * @param reviewId 리뷰 ID
-     */
-    private void deleteReviewPhotos(Long reviewId) {
-        List<PlaceReviewPhoto> photos = placeReviewPhotoRepository.findByPlaceReviewId(reviewId);
-        if (!photos.isEmpty()) {
-            // S3에서 기존 사진 삭제
-            photos.forEach(photo -> {
-                try {
-                    s3Service.deleteFile(photo.getPhotoUrl());
-                } catch (Exception e) {
-                    log.warn("S3 파일 삭제 실패 (무시): {}", photo.getPhotoUrl(), e);
-                }
-            });
-            placeReviewPhotoRepository.deleteAll(photos);
-        }
-    }
 }
 
