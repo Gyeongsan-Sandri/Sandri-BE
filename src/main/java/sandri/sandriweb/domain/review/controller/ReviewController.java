@@ -93,7 +93,7 @@ public class ReviewController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "관광지 없음")
     })
-    public ResponseEntity<ApiResponseDto<CursorResponseDto<String>>> getReviewPhotos(
+    public ResponseEntity<ApiResponseDto<CursorResponseDto<ReviewDto.PhotoDto>>> getReviewPhotos(
             @Parameter(description = "관광지 ID", example = "1")
             @PathVariable Long placeId,
             @Parameter(description = "마지막으로 조회한 사진 ID (첫 조회시 생략)", example = "123")
@@ -110,7 +110,7 @@ public class ReviewController {
                         .body(ApiResponseDto.error("페이지 크기는 1 이상 100 이하여야 합니다."));
             }
 
-            CursorResponseDto<String> response = reviewService.getReviewPhotos(placeId, lastPhotoId, size);
+            CursorResponseDto<ReviewDto.PhotoDto> response = reviewService.getReviewPhotos(placeId, lastPhotoId, size);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (RuntimeException e) {
             log.error("리뷰 사진 목록 조회 실패: {}", e.getMessage());
@@ -124,11 +124,11 @@ public class ReviewController {
 
     @PostMapping("/me/files")
     @Operation(summary = "Presigned URL 발급 (리뷰 사진/영상 업로드용)", 
-               description = "리뷰 작성 및 수정 페이지에서 호출합니다. " +
-                             "프론트엔드에서 선택한 파일들의 파일명과 Content-Type을 전송하면, " +
-                             "각 파일에 대한 Presigned URL을 발급합니다. " +
+               description = "리뷰 작성 및 수정 페이지에서 리뷰 업로드 전 호출합니다. " +
+                             "프론트엔드에서 선택한 파일들의 파일명, order, Content-Type을 전송하면, " +
+                             "각 파일에 대한 Presigned URL을 발급하고 이와 함께 finalUrl과 order를 반환합니다. " +
                              "발급된 Presigned URL로 PUT 요청을 보내 파일을 업로드하고, " +
-                             "업로드 완료 후 finalUrl을 리뷰 작성 시 사용합니다.")
+                             "업로드 완료 후 finalUrl과 order를 리뷰 작성 시 사용합니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Presigned URL 발급 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
@@ -166,12 +166,19 @@ public class ReviewController {
                 }
             }
 
-            // Presigned URL 생성 (S3Service에서 고유한 파일명으로 변환)
+            // Presigned URL 생성 (S3Service에서 고유한 파일명으로 변환, order 포함)
             List<PresignedUrlDto> presignedUrls = request.getFiles().stream()
                     .map(fileInfo -> {
-                        log.debug("Presigned URL 생성: fileName={}, contentType={}", 
-                                 fileInfo.getFileName(), fileInfo.getContentType());
-                        return s3Service.generatePresignedUrl(fileInfo.getFileName(), fileInfo.getContentType());
+                        log.debug("Presigned URL 생성: fileName={}, contentType={}, order={}", 
+                                 fileInfo.getFileName(), fileInfo.getContentType(), fileInfo.getOrder());
+                        PresignedUrlDto presignedUrlDto = s3Service.generatePresignedUrl(fileInfo.getFileName(), fileInfo.getContentType());
+                        // order를 포함하여 반환
+                        return PresignedUrlDto.builder()
+                                .fileName(presignedUrlDto.getFileName())
+                                .presignedUrl(presignedUrlDto.getPresignedUrl())
+                                .finalUrl(presignedUrlDto.getFinalUrl())
+                                .order(fileInfo.getOrder())
+                                .build();
                     })
                     .collect(java.util.stream.Collectors.toList());
 
@@ -190,14 +197,17 @@ public class ReviewController {
 
     @PostMapping("/me/places/{placeId}")
     @Operation(summary = "리뷰 작성", 
-               description = "현재 로그인한 사용자가 특정 장소에 대한 리뷰를 작성합니다. 사진/영상은 AWS S3에 업로드된 URL을 photoUrls에 포함하여 전송합니다.")
+               description = "리뷰 작성 및 수정 페이지에서 리뷰 업로드 시 호출합니다." +
+                             "별점, 리뷰 내용, 사진(순서, finalUrl)을 전송하면 리뷰를 작성하고 작성한 리뷰 ID를 반환합니다. " +
+                             "finalUrl은 프론트에서 getPresignedUrls 호출 시 발급됩니다. 업로드에 성공한 finalUrl을 사용해주세요. " +
+                             "작성한 리뷰의 상세 정보가 필요하면 GET /api/me/reviews/{reviewId} API를 호출하세요.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "리뷰 작성 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "장소 없음")
     })
-    public ResponseEntity<ApiResponseDto<ReviewDto>> createReview(
+    public ResponseEntity<ApiResponseDto<Long>> createReview(
             Authentication authentication,
             @Parameter(description = "장소 ID", example = "1")
             @PathVariable Long placeId,
@@ -211,8 +221,8 @@ public class ReviewController {
             User user = userRepository.findByUsername(username)
                     .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
 
-            ReviewDto response = reviewService.createReview(user.getId(), placeId, request);
-            return ResponseEntity.ok(ApiResponseDto.success(response));
+            Long reviewId = reviewService.createReview(user.getId(), placeId, request);
+            return ResponseEntity.ok(ApiResponseDto.success(reviewId));
         } catch (RuntimeException e) {
             log.error("리뷰 작성 실패: {}", e.getMessage());
             return ResponseEntity.badRequest()
@@ -226,7 +236,8 @@ public class ReviewController {
 
     @GetMapping("/api/me/reviews/{reviewId}")
     @Operation(summary = "리뷰 상세 조회", 
-               description = "현재 로그인한 사용자가 작성한 특정 리뷰의 상세 정보를 조회합니다. 리뷰 수정 페이지에서 사용됩니다.")
+               description = "리뷰 출력/리뷰 수정 시 호출합니다." +
+                             "리뷰 ID, 작성자 정보, 리뷰 내용, 별점, 작성 일시, 사진 정보 리스트를 반환합니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
@@ -268,7 +279,11 @@ public class ReviewController {
 
     @PutMapping("/api/me/reviews/{reviewId}")
     @Operation(summary = "리뷰 수정", 
-               description = "현재 로그인한 사용자가 작성한 리뷰를 수정합니다. 사진/영상은 AWS S3에 업로드된 URL을 photoUrls에 포함하여 전송하며, 기존 사진은 삭제됩니다.")
+               description = "마이페이지: 내 리뷰 페이지에서 리뷰 수정 시 호출합니다." +
+                             "별점, 리뷰 내용, 사진(순서, finalUrl)을 전송하면 리뷰를 수정하고 수정된 리뷰 ID를 반환합니다. " +
+                             "finalUrl은 프론트에서 getPresignedUrls 호출 시 발급됩니다. 업로드에 성공한 finalUrl을 사용해주세요. " +
+                             "기존 사진 엔티티는 모두 삭제되고 새로운 사진으로 교체되지만, S3에 저장된 실제 파일은 삭제되지 않습니다. " +
+                             "수정된 리뷰의 상세 정보가 필요하면 GET /api/me/reviews/{reviewId} API를 호출하세요.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "리뷰 수정 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
@@ -276,7 +291,7 @@ public class ReviewController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "리뷰 없음"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    public ResponseEntity<ApiResponseDto<ReviewDto>> updateReview(
+    public ResponseEntity<ApiResponseDto<Long>> updateReview(
             Authentication authentication,
             @Parameter(description = "리뷰 ID", example = "1")
             @PathVariable Long reviewId,
@@ -290,8 +305,8 @@ public class ReviewController {
             User user = userRepository.findByUsername(username)
                     .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
 
-            ReviewDto response = reviewService.updateReview(user.getId(), reviewId, request);
-            return ResponseEntity.ok(ApiResponseDto.success(response));
+            Long updatedReviewId = reviewService.updateReview(user.getId(), reviewId, request);
+            return ResponseEntity.ok(ApiResponseDto.success(updatedReviewId));
         } catch (RuntimeException e) {
             log.error("리뷰 수정 실패: {}", e.getMessage());
             if (e.getMessage().contains("권한")) {
@@ -312,7 +327,8 @@ public class ReviewController {
 
     @DeleteMapping("/api/me/reviews/{reviewId}")
     @Operation(summary = "리뷰 삭제", 
-               description = "현재 로그인한 사용자가 작성한 리뷰를 삭제합니다. 연결된 사진도 함께 삭제됩니다.")
+               description = "마이페이지: 내 리뷰 페이지에서 리뷰 삭제 시 호출합니다." +
+                             "연결된 사진 엔티티는 삭제되지만, S3에 저장된 실제 파일은 삭제되지 않습니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "리뷰 삭제 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
@@ -354,7 +370,7 @@ public class ReviewController {
 
     @GetMapping("/api/me/reviews")
     @Operation(summary = "내가 작성한 리뷰 목록 조회 (커서 기반 페이징)", 
-               description = "현재 로그인한 사용자가 작성한 리뷰 목록을 커서 기반으로 페이징하여 조회합니다. 마지막으로 조회한 리뷰 ID를 기준으로 다음 페이지를 가져옵니다.")
+               description = "현재 로그인한 사용자가 작성한 리뷰 목록을 커서 기반으로 페이징하여 조회합니다. 마지막으로 조회한 리뷰 ID를 기준으로 다음 리뷰를 가져옵니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),

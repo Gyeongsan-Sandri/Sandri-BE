@@ -45,10 +45,10 @@ public class ReviewService {
      * @param userId 사용자 ID
      * @param placeId 장소 ID
      * @param request 리뷰 작성 요청 DTO
-     * @return 작성된 리뷰 DTO
+     * @return 작성된 리뷰 ID
      */
     @Transactional
-    public ReviewDto createReview(Long userId, Long placeId, CreateReviewRequestDto request) {
+    public Long createReview(Long userId, Long placeId, CreateReviewRequestDto request) {
         // Place 조회
         Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
@@ -75,12 +75,13 @@ public class ReviewService {
 
         // 사진이 있는 경우 PlaceReviewPhoto 저장
         List<PlaceReviewPhoto> photos = new ArrayList<>();
-        if (request.getPhotoUrls() != null && !request.getPhotoUrls().isEmpty()) {
-            photos = request.getPhotoUrls().stream()
-                    .map(photoUrl -> PlaceReviewPhoto.builder()
+        if (request.getPhotos() != null && !request.getPhotos().isEmpty()) {
+            photos = request.getPhotos().stream()
+                    .map(photoInfo -> PlaceReviewPhoto.builder()
                             .placeReview(savedReview)
                             .place(place)
-                            .photoUrl(photoUrl)
+                            .photoUrl(photoInfo.getPhotoUrl())
+                            .order(photoInfo.getOrder())
                             .build())
                     .collect(Collectors.toList());
 
@@ -89,8 +90,8 @@ public class ReviewService {
 
         log.info("리뷰 작성 완료: reviewId={}, userId={}, placeId={}", savedReview.getId(), userId, placeId);
 
-        // 저장된 리뷰에 photos 설정 (같은 트랜잭션 내에서 lazy loading이 작동하므로 자동으로 로드됨)
-        return ReviewDto.from(savedReview);
+        // 리뷰 ID만 반환
+        return savedReview.getId();
     }
 
     /**
@@ -98,10 +99,10 @@ public class ReviewService {
      * @param userId 사용자 ID
      * @param reviewId 리뷰 ID
      * @param request 리뷰 수정 요청 DTO
-     * @return 수정된 리뷰 DTO
+     * @return 수정된 리뷰 ID
      */
     @Transactional
-    public ReviewDto updateReview(Long userId, Long reviewId, UpdateReviewRequestDto request) {
+    public Long updateReview(Long userId, Long reviewId, UpdateReviewRequestDto request) {
         // 리뷰 조회 및 소유자 확인
         PlaceReview review = placeReviewRepository.findById(reviewId)
                 .orElseThrow(() -> new RuntimeException("리뷰를 찾을 수 없습니다."));
@@ -114,17 +115,21 @@ public class ReviewService {
         review.update(request.getRating(), request.getContent());
         PlaceReview updatedReview = placeReviewRepository.save(review);
 
-        // 기존 사진 삭제
-        deleteReviewPhotos(reviewId);
+        // 기존 사진 삭제 (엔티티만 삭제, S3에서는 삭제하지 않음)
+        List<PlaceReviewPhoto> existingPhotos = placeReviewPhotoRepository.findByPlaceReviewId(reviewId);
+        if (!existingPhotos.isEmpty()) {
+            placeReviewPhotoRepository.deleteAll(existingPhotos);
+        }
 
         // 새로운 사진 저장
         List<PlaceReviewPhoto> newPhotos = new ArrayList<>();
-        if (request.getPhotoUrls() != null && !request.getPhotoUrls().isEmpty()) {
-            newPhotos = request.getPhotoUrls().stream()
-                    .map(photoUrl -> PlaceReviewPhoto.builder()
+        if (request.getPhotos() != null && !request.getPhotos().isEmpty()) {
+            newPhotos = request.getPhotos().stream()
+                    .map(photoInfo -> PlaceReviewPhoto.builder()
                             .placeReview(updatedReview)
                             .place(updatedReview.getPlace())
-                            .photoUrl(photoUrl)
+                            .photoUrl(photoInfo.getPhotoUrl())
+                            .order(photoInfo.getOrder())
                             .build())
                     .collect(Collectors.toList());
 
@@ -133,11 +138,8 @@ public class ReviewService {
 
         log.info("리뷰 수정 완료: reviewId={}, userId={}", reviewId, userId);
 
-        // 수정된 리뷰 조회 (사진 포함)
-        PlaceReview reviewWithPhotos = placeReviewRepository.findById(reviewId)
-                .orElseThrow(() -> new RuntimeException("수정된 리뷰를 찾을 수 없습니다."));
-
-        return ReviewDto.from(reviewWithPhotos);
+        // 리뷰 ID만 반환
+        return reviewId;
     }
 
     /**
@@ -155,8 +157,11 @@ public class ReviewService {
             throw new RuntimeException("리뷰를 삭제할 권한이 없습니다.");
         }
 
-        // 리뷰에 연결된 사진들 삭제 (S3에서도 삭제)
-        deleteReviewPhotos(reviewId);
+        // 리뷰에 연결된 사진들 삭제 (엔티티만 삭제, S3에서는 삭제하지 않음)
+        List<PlaceReviewPhoto> photos = placeReviewPhotoRepository.findByPlaceReviewId(reviewId);
+        if (!photos.isEmpty()) {
+            placeReviewPhotoRepository.deleteAll(photos);
+        }
 
         // 리뷰 삭제
         placeReviewRepository.delete(review);
@@ -204,10 +209,10 @@ public class ReviewService {
      * @param placeId 관광지 ID
      * @param lastPhotoId 마지막으로 조회한 사진 ID (첫 조회시 null)
      * @param size 페이지 크기
-     * @return 커서 기반 페이징된 리뷰 사진 URL 리스트
+     * @return 커서 기반 페이징된 리뷰 사진 정보 리스트 (order 포함)
      */
     @Transactional(readOnly = true)
-    public CursorResponseDto<String> getReviewPhotos(Long placeId, Long lastPhotoId, int size) {
+    public CursorResponseDto<ReviewDto.PhotoDto> getReviewPhotos(Long placeId, Long lastPhotoId, int size) {
         // size + 1개를 가져와서 다음 페이지 존재 여부 확인
         Pageable pageable = PageRequest.of(0, size + 1);
         
@@ -216,8 +221,17 @@ public class ReviewService {
         // 총 리뷰 사진 개수 조회
         Long totalCount = placeReviewPhotoRepository.countByPlaceId(placeId);
         
-        // 커서 기반 페이징 처리
-        return buildCursorResponse(allPhotos, size, PlaceReviewPhoto::getPhotoUrl, PlaceReviewPhoto::getId, totalCount);
+        // 커서 기반 페이징 처리 (PhotoDto로 변환)
+        return buildCursorResponse(
+                allPhotos, 
+                size, 
+                photo -> ReviewDto.PhotoDto.builder()
+                        .photoUrl(photo.getPhotoUrl())
+                        .order(photo.getOrder())
+                        .build(),
+                PlaceReviewPhoto::getId, 
+                totalCount
+        );
     }
 
     /**
@@ -289,8 +303,8 @@ public class ReviewService {
      */
     @Transactional(readOnly = true)
     public ReviewDto getReviewById(Long userId, Long reviewId) {
-        // 리뷰 조회 및 소유자 확인
-        PlaceReview review = placeReviewRepository.findById(reviewId)
+        // 리뷰 조회 및 소유자 확인 (사진과 사용자 정보 포함)
+        PlaceReview review = placeReviewRepository.findByIdWithPhotos(reviewId)
                 .orElseThrow(() -> new RuntimeException("리뷰를 찾을 수 없습니다."));
 
         // 본인이 작성한 리뷰인지 확인

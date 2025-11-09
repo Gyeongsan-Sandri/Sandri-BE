@@ -1,5 +1,6 @@
 package sandri.sandriweb.domain.review.dto;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -30,6 +31,10 @@ public class RequestPresignedUrlRequestDto {
         
         @NotBlank(message = "파일 타입(Content-Type)은 필수입니다")
         private String contentType;  // image/jpeg, image/png, video/mp4 등
+        
+        @NotNull(message = "사진 순서는 필수입니다")
+        @Min(value = 0, message = "사진 순서는 0 이상이어야 합니다")
+        private Integer order;  // 사진 순서 (0부터 시작)
     }
 }
 

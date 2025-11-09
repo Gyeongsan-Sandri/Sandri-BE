@@ -157,5 +157,16 @@ public interface PlaceReviewRepository extends JpaRepository<PlaceReview, Long> 
      */
     @Query("SELECT COUNT(r) FROM PlaceReview r WHERE r.place.id = :placeId AND r.enabled = true")
     Long countByPlaceId(@Param("placeId") Long placeId);
+    
+    /**
+     * 리뷰 ID로 리뷰 조회 (사진과 사용자 정보 포함)
+     * @param reviewId 리뷰 ID
+     * @return 리뷰 엔티티 (사진과 사용자 정보 포함)
+     */
+    @Query("SELECT DISTINCT r FROM PlaceReview r " +
+           "LEFT JOIN FETCH r.user " +
+           "LEFT JOIN FETCH r.photos " +
+           "WHERE r.id = :reviewId")
+    java.util.Optional<PlaceReview> findByIdWithPhotos(@Param("reviewId") Long reviewId);
 }
 
