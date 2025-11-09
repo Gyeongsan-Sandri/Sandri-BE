@@ -76,7 +76,10 @@ const placeResponse = await fetch('http://localhost:8080/api/places/1');
 const placeData = await placeResponse.json();
 
 // 2. 근처 가볼만한 곳 조회 (필요한 경우)
-const nearbyResponse = await fetch('http://localhost:8080/api/places/1/nearby?category=맛집&count=3');
+// 거리 순 조회
+const nearbyResponse = await fetch('http://localhost:8080/api/places/1/nearby?count=10');
+// 대분류별 조회 (좋아요 순)
+// const nearbyResponse = await fetch('http://localhost:8080/api/places/1/nearby/group?group=맛집&count=6');
 const nearbyData = await nearbyResponse.json();
 
 // 3. 리뷰 목록 조회 (필요한 경우) - 커서 기반 페이징
@@ -92,42 +95,18 @@ const photosData = await photosResponse.json();
 // const nextPhotosResponse = await fetch(`http://localhost:8080/api/places/1/reviews/photos?lastPhotoId=${photosData.data.nextCursor}&size=20`);
 ```
 
-### 2.2 근처 장소 조회 (카테고리별)
+### 2.2 근처 가볼만한 곳 조회 (거리 순)
 ```
-GET http://localhost:8080/api/places/1/nearby?category=관광지&count=3
-```
-
-**Query Parameters:**
-- `category` (required): 카테고리 (관광지, 맛집, 카페)
-- `count` (optional, default: 3): 조회할 개수
-
-**응답 예시:**
-```json
-{
-  "success": true,
-  "message": "성공",
-  "data": [
-    {
-      "name": "경주 석굴암",
-      "thumbnailUrl": "https://s3.../photo.jpg",
-      "distanceInMeters": 2500,
-      "categoryName": "역사/전통"
-    }
-  ]
-}
-```
-
-### 2.3 근처 장소 조회 (전체)
-```
-GET http://localhost:8080/api/places/1/nearby/all?count=10
+GET http://localhost:8080/api/places/1/nearby?count=10
 ```
 
 **Query Parameters:**
 - `count` (optional, default: 10): 조회할 개수
 
 **설명:**
-- 카테고리 필터 없이 거리순으로 정렬된 근처 장소 목록을 반환합니다.
-- 모든 카테고리(관광지, 맛집, 카페)를 포함합니다.
+- 지도 아래 주변 탐색 버튼을 눌렀을 때 출력할 관광지를 조회합니다.
+- 대분류 필터 없이 전체에서 가까운 순으로 조회합니다.
+- 현재 장소 포함 (rank 0)
 
 **응답 예시:**
 ```json
@@ -136,16 +115,64 @@ GET http://localhost:8080/api/places/1/nearby/all?count=10
   "message": "성공",
   "data": [
     {
-      "name": "경주 석굴암",
+      "placeId": 1,
+      "name": "경주 불국사",
       "thumbnailUrl": "https://s3.../photo.jpg",
-      "distanceInMeters": 2500,
-      "categoryName": "역사/전통"
+      "latitude": 35.7894,
+      "longitude": 129.3320,
+      "distanceInMeters": 0,
+      "rank": 0
     },
     {
+      "placeId": 2,
+      "name": "경주 석굴암",
+      "thumbnailUrl": "https://s3.../photo.jpg",
+      "latitude": 35.8000,
+      "longitude": 129.3400,
+      "distanceInMeters": 1500,
+      "rank": 1
+    }
+  ]
+}
+```
+
+### 2.3 근처 가볼만한 곳 조회 (대분류별, 좋아요 순)
+```
+GET http://localhost:8080/api/places/1/nearby/group?group=맛집&count=6
+```
+
+**Query Parameters:**
+- `group` (required): 대분류 (관광지, 맛집, 카페)
+- `count` (optional, default: 6): 조회할 개수
+
+**설명:**
+- 관광지 상세페이지 하단의 "이 근처의 가볼만한 곳"에서 호출합니다.
+- 현재 관광지에서 10km 이내이고 대분류에 속하는 관광지 중 좋아요가 높은 순으로 반환합니다.
+- 기본값 6개 반환 (3개씩 출력하도록 설계됨)
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "placeId": 2,
       "name": "경주 맛집",
       "thumbnailUrl": "https://s3.../photo.jpg",
+      "latitude": 35.8000,
+      "longitude": 129.3400,
+      "distanceInMeters": 2500,
+      "rank": 1
+    },
+    {
+      "placeId": 3,
+      "name": "경주 카페",
+      "thumbnailUrl": "https://s3.../photo.jpg",
+      "latitude": 35.8100,
+      "longitude": 129.3500,
       "distanceInMeters": 3200,
-      "categoryName": "식도락"
+      "rank": 2
     }
   ]
 }
@@ -153,7 +180,7 @@ GET http://localhost:8080/api/places/1/nearby/all?count=10
 
 ### 2.4 카테고리별 장소 조회
 ```
-GET http://localhost:8080/api/places/category?category=자연/힐링&count=10
+GET http://localhost:8080/api/places?category=자연/힐링&count=10
 ```
 
 **Query Parameters:**
@@ -173,8 +200,6 @@ GET http://localhost:8080/api/places/category?category=자연/힐링&count=10
       "name": "경주 불국사",
       "address": "경상북도 경주시 불국로 385",
       "thumbnailUrl": "https://s3.../photo.jpg",
-      "rating": 4.5,
-      "likeCount": 120,
       "isLiked": true,
       "groupName": "관광지",
       "categoryName": "역사/전통"
@@ -183,45 +208,31 @@ GET http://localhost:8080/api/places/category?category=자연/힐링&count=10
 }
 ```
 
-### 2.5 장소 사진 목록 조회 (커서 페이징)
+### 2.5 전체 장소 목록 조회 (간단 정보)
 ```
-GET http://localhost:8080/api/places/photos?size=10
+GET http://localhost:8080/api/places/simple
 ```
-
-**Query Parameters:**
-- `lastPlaceId` (optional): 마지막으로 조회한 place_id (첫 조회시 생략, 다음 페이지 조회시 사용)
-- `size` (optional, default: 10): 페이지 크기 (한 번에 조회할 개수)
 
 **설명:**
-- 모든 장소의 첫 번째 사진을 커서 기반 페이징으로 조회합니다.
-- place_id를 커서로 사용하여 배치 처리합니다.
+- 전체 관광지의 ID와 이름만 반환합니다.
+- 전체 DB 목록 확인용
 
 **응답 예시:**
 ```json
 {
   "success": true,
   "message": "성공",
-  "data": {
-    "photos": [
-      {
-        "placeId": 1,
-        "photoUrl": "https://s3.../photo1.jpg"
-      },
-      {
-        "placeId": 2,
-        "photoUrl": "https://s3.../photo2.jpg"
-      }
-    ],
-    "size": 10,
-    "nextCursor": 15,
-    "hasNext": true
-  }
+  "data": [
+    {
+      "placeId": 1,
+      "name": "경주 불국사"
+    },
+    {
+      "placeId": 2,
+      "name": "경주 석굴암"
+    }
+  ]
 }
-```
-
-**다음 페이지 조회:**
-```
-GET http://localhost:8080/api/places/photos?lastPlaceId=15&size=10
 ```
 
 ### 2.6 장소 좋아요 토글
@@ -905,8 +916,11 @@ if (pm.response.code === 200) {
 ## 테스트 시나리오 예시
 
 ### 시나리오 1: 장소 조회 및 좋아요
-1. `GET /api/places/category?category=자연/힐링&count=5` - 카테고리별 장소 조회
-2. `POST /api/places/1/like` - 좋아요 추가 (로그인 필요)
+1. `GET /api/places?category=자연/힐링&count=5` - 카테고리별 장소 조회
+2. `GET /api/places/1/nearby?count=10` - 근처 가볼만한 곳 조회 (거리 순)
+3. `GET /api/places/1/nearby/group?group=맛집&count=6` - 근처 가볼만한 곳 조회 (대분류별, 좋아요 순)
+4. `GET /api/places/simple` - 전체 장소 목록 조회 (간단 정보)
+5. `POST /api/places/1/like` - 좋아요 추가 (로그인 필요)
 
 ### 시나리오 2: 리뷰 작성 및 조회
 1. `POST /api/auth/login` - 로그인

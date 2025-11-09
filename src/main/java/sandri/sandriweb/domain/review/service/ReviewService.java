@@ -7,7 +7,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import sandri.sandriweb.domain.place.dto.CursorResponseDto;
+import sandri.sandriweb.domain.review.dto.CursorResponseDto;
 import sandri.sandriweb.domain.review.dto.PageResponseDto;
 import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.place.entity.Place;
