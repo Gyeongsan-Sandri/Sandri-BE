@@ -114,6 +114,7 @@ public class SecurityConfig {
                 "https://localhost:5173",     // 로컬 프론트 (HTTPS)
                 "http://13.125.26.64:8080",   // Swagger 테스트
                 "https://sandri.site",        // 실제 배포
+                "https://www.sandri.site",        // 실제 배포
                 "https://api.sandri.site"     // 최종 배포 서버 (Swagger)
         ));
 
