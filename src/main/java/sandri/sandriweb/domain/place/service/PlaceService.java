@@ -143,66 +143,6 @@ public class PlaceService {
     }
     
     /**
-     * Place ID로 근처 가볼만한 곳 조회 (카테고리별)
-     * @param placeId 기준 관광지 ID
-     * @param groupName 카테고리 이름 (관광지/맛집/카페)
-     * @param limit 조회할 개수
-     * @return 근처 관광지 리스트
-     */
-    public List<NearbyPlaceDto> getNearbyPlacesByPlaceId(Long placeId, String groupName, int limit) {
-        // 1. 카테고리 검증
-        try {
-            PlaceCategory.valueOf(groupName);
-        } catch (IllegalArgumentException e) {
-            throw new RuntimeException("카테고리는 '관광지', '맛집', '카페' 중 하나여야 합니다.");
-        }
-        
-        // 2. 기준 장소 조회
-        Place place = placeRepository.findById(placeId)
-                .orElseThrow(() -> new RuntimeException("관광지를 찾을 수 없습니다."));
-        
-        // 3. 5km 반경 (미터 단위)
-        double radius = 5000.0;
-        
-        // 4. 카테고리별 근처 장소 조회
-        List<Place> nearbyPlaces = placeRepository.findNearbyPlacesByCategory(
-                place.getLocation(),
-                radius,
-                place.getId(),
-                groupName,
-                limit
-        );
-        
-        if (nearbyPlaces.isEmpty()) {
-            return List.of();
-        }
-        
-        // 4. 사진 조회 및 매핑 (공통 헬퍼 메서드 사용)
-        List<Long> nearbyPlaceIds = nearbyPlaces.stream()
-                .map(Place::getId)
-                .collect(Collectors.toList());
-        Map<Long, String> photoUrlByPlaceId = getPhotoUrlByPlaceIds(nearbyPlaceIds);
-        
-        // 5. 기준 장소의 위치
-        Point centerLocation = place.getLocation();
-        
-        // 6. DTO 변환
-        return nearbyPlaces.stream()
-                .map(nearbyPlace -> {
-                    String thumbnailUrl = photoUrlByPlaceId.get(nearbyPlace.getId());
-                    Long distance = calculateDistanceInMeters(centerLocation, nearbyPlace.getLocation());
-                    
-                    return NearbyPlaceDto.builder()
-                            .placeId(nearbyPlace.getId())
-                            .name(nearbyPlace.getName())
-                            .thumbnailUrl(thumbnailUrl)
-                            .distanceInMeters(distance)
-                            .build();
-                })
-                .collect(Collectors.toList());
-    }
-
-    /**
      * Place ID로 근처 가볼만한 곳 조회 (카테고리 필터 없음, 반경 제한 없음)
      * 전체 Place 목록에서 현재 관광지와 위치상 가까운 순으로 조회 (현재 장소 포함)
      * @param placeId 기준 관광지 ID

@@ -57,6 +57,7 @@ public class User extends BaseEntity implements UserDetails {
     private boolean phoneVerified;
     
     @Enumerated(EnumType.STRING)
+    @Column(length = 50)
     private TravelStyle travelStyle;
     
     @Column

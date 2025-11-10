@@ -23,6 +23,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.user.dto.*;
+import sandri.sandriweb.domain.user.entity.User;
+import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.domain.user.service.UserService;
 
 @RestController
@@ -34,6 +36,7 @@ public class AuthController {
     
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
+    private final UserRepository userRepository;
     
     @PostMapping("/login")
     @Operation(
@@ -218,5 +221,43 @@ public class AuthController {
         ApiResponseDto<CheckDuplicateResponseDto> response = userService.checkNicknameDuplicate(nickname);
         
         return ResponseEntity.ok(response);
+    }
+    
+    @GetMapping("/me")
+    @Operation(
+            summary = "로그인 확인",
+            description = "현재 로그인되어 있는지 확인하고, 인증된 사용자의 기본 정보(id, username, nickname)를 반환합니다."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "로그인 확인 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseDto.class),
+                            examples = @ExampleObject(
+                                    name = "성공 응답",
+                                    value = "{\n  \"success\": true,\n  \"message\": \"성공\",\n  \"data\": {\n    \"id\": 1,\n    \"username\": \"hong123\",\n    \"nickname\": \"홍길동\"\n  }\n}"
+                            )
+                    )
+            ),
+            @ApiResponse(responseCode = "401", description = "인증 필요"),
+            @ApiResponse(responseCode = "404", description = "사용자 없음")
+    })
+    public ResponseEntity<ApiResponseDto<AuthMeResponseDto>> getMe(Authentication authentication) {
+        try {
+            String username = authentication.getName();
+            log.info("로그인 확인 요청: username={}", username);
+            
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+            
+            AuthMeResponseDto authMeDto = AuthMeResponseDto.from(user);
+            return ResponseEntity.ok(ApiResponseDto.success(authMeDto));
+            
+        } catch (Exception e) {
+            log.error("로그인 확인 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("로그인 확인에 실패했습니다: " + e.getMessage()));
+        }
     }
 }

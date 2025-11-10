@@ -21,6 +21,6 @@ public class UpdateReviewRequestDto {
     @Size(max = 1000, message = "리뷰 내용은 1000자 이하여야 합니다")
     private String content;
 
-    private List<String> photoUrls; // AWS S3에 업로드된 사진/영상 URL 리스트 (선택사항)
+    private List<CreateReviewRequestDto.PhotoInfo> photos; // AWS S3에 업로드된 사진/영상 정보 리스트 (선택사항)
 }
 

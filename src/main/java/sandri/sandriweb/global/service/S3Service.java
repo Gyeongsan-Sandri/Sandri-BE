@@ -26,7 +26,7 @@ public interface S3Service {
 
     /**
      * Presigned URL 생성 (프론트엔드가 직접 S3에 업로드하기 위한 URL)
-     * @param fileName 파일명 (S3 키)
+     * @param fileName 파일명 (S3 키, 프론트엔드에서 전달받은 원본 파일명)
      * @param contentType 파일 타입 (예: image/jpeg, image/png, video/mp4)
      * @return PresignedUrlDto (presignedUrl과 finalUrl 포함)
      */

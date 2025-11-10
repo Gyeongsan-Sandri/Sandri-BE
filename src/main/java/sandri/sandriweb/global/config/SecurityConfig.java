@@ -64,7 +64,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // Swagger UI 경로 허용
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-resources/**", "/webjars/**").permitAll()
-                        // 인증 관련 API는 모두 허용
+                        // 인증 관련 API - 로그인 확인은 인증 필요
+                        .requestMatchers("/api/auth/me").authenticated()
+                        // 나머지 인증 관련 API는 모두 허용
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/", "/api/user/profile/**").permitAll()
                         .requestMatchers("/api/common/**").permitAll()
