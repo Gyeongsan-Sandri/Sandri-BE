@@ -32,4 +32,12 @@ public class PlaceReviewPhoto extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "place_review_id")
     private PlaceReview placeReview;
+
+    /**
+     * 사진 URL 수정
+     * @param photoUrl 사진 URL
+     */
+    public void updatePhotoUrl(String photoUrl) {
+        this.photoUrl = photoUrl;
+    }
 }

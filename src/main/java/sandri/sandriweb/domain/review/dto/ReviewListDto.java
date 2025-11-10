@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Schema(description = "관리자용 리뷰 목록 응답 DTO (reviewId와 content만 포함)")
-public class AdminReviewListDto {
+public class ReviewListDto {
     
     @Schema(description = "리뷰 ID", example = "1")
     private Long reviewId;

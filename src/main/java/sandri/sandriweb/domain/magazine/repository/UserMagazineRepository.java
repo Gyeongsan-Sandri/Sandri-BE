@@ -14,6 +14,10 @@ public interface UserMagazineRepository extends JpaRepository<UserMagazine, Long
 
     /**
      * 특정 사용자가 특정 매거진에 좋아요를 눌렀는지 확인
+     * enabled 여부와 관계없이 조회 (토글 로직에서 disabled된 좋아요도 재활성화 가능)
+     * @param userId 사용자 ID
+     * @param magazineId 매거진 ID
+     * @return UserMagazine (없으면 Optional.empty())
      */
     Optional<UserMagazine> findByUserIdAndMagazineId(Long userId, Long magazineId);
 

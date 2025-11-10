@@ -27,4 +27,12 @@ public class PlacePhoto extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "place_id")
     private Place place;
+
+    /**
+     * 사진 URL 수정
+     * @param photoUrl 사진 URL
+     */
+    public void updatePhotoUrl(String photoUrl) {
+        this.photoUrl = photoUrl;
+    }
 }

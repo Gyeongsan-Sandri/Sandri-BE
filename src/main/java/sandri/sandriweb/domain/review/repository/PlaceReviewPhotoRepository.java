@@ -14,6 +14,14 @@ public interface PlaceReviewPhotoRepository extends JpaRepository<PlaceReviewPho
     
     List<PlaceReviewPhoto> findByPlaceReviewId(Long placeReviewId);
 
+    /**
+     * 리뷰 ID로 enabled된 사진 목록 조회 (order 순서대로)
+     * @param reviewId 리뷰 ID
+     * @return enabled된 사진 목록
+     */
+    @Query("SELECT p FROM PlaceReviewPhoto p WHERE p.placeReview.id = :reviewId AND p.enabled = true ORDER BY p.order ASC")
+    List<PlaceReviewPhoto> findEnabledByReviewId(@Param("reviewId") Long reviewId);
+
     // 커서 기반 페이징 - 최신순 (createdAt DESC, id DESC)
     @Query("SELECT p FROM PlaceReviewPhoto p " +
            "WHERE p.place.id = :placeId " +

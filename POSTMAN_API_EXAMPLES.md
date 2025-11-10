@@ -58,10 +58,8 @@ GET http://localhost:8080/api/places/1
 ```
 
 **설명:**
-- 장소의 기본 정보만 반환합니다 (리뷰 정보 제외)
-- 리뷰 정보가 필요하면 `/api/places/{placeId}/reviews` API를 별도로 호출하세요
-- 리뷰 사진이 필요하면 `/api/places/{placeId}/reviews/photos` API를 별도로 호출하세요
-- 근처 가볼만한 곳이 필요하면 `/api/places/{placeId}/nearby` API를 별도로 호출하세요
+- 관광지의 기본 정보를 조회합니다. 이름, 주소, 평점, 카테고리, 공식 사진을 반환합니다.
+- 리뷰 정보는 `/api/places/{placeId}/reviews` API를 별도로 호출하세요.
 
 **반환 정보:**
 - 장소 기본 정보 (이름, 주소, 좌표)
@@ -138,8 +136,9 @@ GET http://localhost:8080/api/places/1/nearby?count=10
 
 **설명:**
 - 지도 아래 주변 탐색 버튼을 눌렀을 때 출력할 관광지를 조회합니다.
-- 대분류 필터 없이 전체에서 가까운 순으로 조회합니다.
-- 현재 장소 포함 (rank 0)
+- 특정 관광지 근처의 추천 장소 목록을 대분류 필터 없이 전체에서 가까운 순으로 조회합니다.
+- count 값이 없을 시 기본값으로 조회합니다.
+- 관광지 ID, 이름, 대표 사진 한 장, 위도/경도(지도 출력용), 현재 장소로부터 가까운 순위를 반환합니다. (0일 경우 현재 장소)
 
 **응답 예시:**
 ```json
@@ -179,9 +178,10 @@ GET http://localhost:8080/api/places/1/nearby/group?group=맛집&count=6
 - `count` (optional, default: 6): 조회할 개수
 
 **설명:**
-- 관광지 상세페이지 하단의 "이 근처의 가볼만한 곳"에서 호출합니다.
-- 현재 관광지에서 10km 이내이고 대분류에 속하는 관광지 중 좋아요가 높은 순으로 반환합니다.
-- 기본값 6개 반환 (3개씩 출력하도록 설계됨)
+- 관광지 상세페이지 하단의 이 근처의 가볼만한 곳에서 호출하여 사용합니다.
+- 현재 관광지에서 10km 이내이고 대분류에 속하는 관광지 중 좋아요가 높은 관광지 6개를 반환합니다.
+- count 값이 없을 시 기본값으로 조회합니다.
+- 3개씩 출력하게 되어있을텐데 원래는 버튼 누를 때마다 API 호출해야 하지만 편의상 6개를 한 번에 받고 3개씩 출력해주세요.
 
 **응답 예시:**
 ```json
@@ -604,7 +604,8 @@ Content-Type: application/json
 ```
 
 **참고**: 
-- 기존 사진 엔티티는 모두 삭제되고 새로운 사진으로 교체됩니다.
+- 사진 정보(photos)가 포함된 경우, order 값에 따라 기존 사진을 업데이트하거나 새로 생성하며, photoUrl이 빈 문자열("")이면 해당 order의 사진을 비활성화합니다.
+- 요청에 없는 order의 사진은 유지됩니다 (비활성화되지 않음).
 - S3에 저장된 실제 파일은 삭제되지 않습니다.
 - 수정된 리뷰의 상세 정보가 필요하면 `GET /api/me/reviews/{reviewId}` API를 호출하세요.
 
@@ -634,6 +635,34 @@ DELETE http://localhost:8080/api/me/reviews/1
 GET http://localhost:8080/api/magazines/1
 ```
 
+**설명:**
+- 매거진 상세 조회 시 호출합니다.
+- 매거진 ID, 매거진 내용, 카드뉴스 개수, 카드뉴스 리스트를 반환합니다.
+- 카드뉴스 리스트에서는 카드뉴스 순서(order), 카드뉴스 URL(cardUrl)을 반환합니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": {
+    "magazineId": 1,
+    "content": "경주는 신라 천년의 고도로, 불국사와 석굴암을 비롯한 많은 문화유산이 있습니다.",
+    "cardCount": 5,
+    "cards": [
+      {
+        "order": 0,
+        "cardUrl": "https://s3.../card1.jpg"
+      },
+      {
+        "order": 1,
+        "cardUrl": "https://s3.../card2.jpg"
+      }
+    ]
+  }
+}
+```
+
 ### 4.2 매거진 목록 조회 (커서 기반 페이징)
 ```
 GET http://localhost:8080/api/magazines?size=10
@@ -642,6 +671,12 @@ GET http://localhost:8080/api/magazines?size=10
 **Query Parameters:**
 - `lastMagazineId` (optional): 마지막으로 조회한 매거진 ID (첫 조회시 생략, 다음 페이지 조회시 사용)
 - `size` (optional, default: 10): 페이지 크기 (한 번에 조회할 개수)
+
+**설명:**
+- 홈: 여행 매거진 모아보기 페이지에서 호출합니다.
+- 매거진 목록을 커서 기반(마지막으로 호출한 매거진 ID + 추가로 호출할 매거진 개수를 받아 호출)으로 페이징하여 조회합니다.
+- 매거진 객체, 반환한 매거진 개수(요청한 수), 마지막으로 호출한 매거진 ID(다음 요청 시 사용), 전체 매거진 개수를 반환합니다.
+- 매거진 객체에서는 매거진 ID, 매거진 제목, 매거진 썸네일(첫 번째 카드 이미지), 매거진 요약, 매거진 태그, 사용자 좋아요 여부를 반환합니다.
 
 **응답 예시:**
 ```json
@@ -655,6 +690,16 @@ GET http://localhost:8080/api/magazines?size=10
         "title": "경주 여행 완벽 가이드",
         "thumbnail": "https://s3.../card1.jpg",
         "summary": "경주의 대표 관광지를 한눈에 볼 수 있는 가이드",
+        "tags": [
+          {
+            "tagId": 1,
+            "name": "경주"
+          },
+          {
+            "tagId": 2,
+            "name": "관광지"
+          }
+        ],
         "isLiked": true
       }
     ],
@@ -681,12 +726,80 @@ POST http://localhost:8080/api/magazines/1/like
 ```
 **인증 필요**: 로그인 필수
 
+**설명:**
+- 매거진 상세 페이지에서 호출합니다.
+- 매거진에 좋아요를 추가하거나 취소합니다. 이미 좋아요한 경우 취소되고, 좋아요하지 않은 경우 추가됩니다.
+
 **응답 예시:**
 ```json
 {
   "success": true,
   "message": "좋아요가 추가되었습니다.",
   "data": true
+}
+```
+
+### 4.4 매거진 카드뉴스에 매핑된 장소 목록 조회
+```
+GET http://localhost:8080/api/magazines/1/places
+```
+
+**설명:**
+- 매거진 상세: 마지막 페이지의 관광지 보러가기 버튼에서 호출합니다.
+- 매거진 ID를 받아 해당 매거진의 카드뉴스에 연결된 모든 Place를 SimplePlaceDto 리스트로 반환합니다.
+- 로그인한 경우 사용자가 좋아요한 장소 여부도 함께 반환됩니다.
+- SimplePlaceDto 리스트에서는 장소 ID, 장소 이름, 장소 썸네일, 장소 주소, 장소 카테고리, 사용자 좋아요 여부를 반환합니다. (기준 거리 필드 = null)
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "placeId": 1,
+      "name": "경주 불국사",
+      "address": "경상북도 경주시 불국로 385",
+      "thumbnailUrl": "https://s3.../photo.jpg",
+      "isLiked": true,
+      "groupName": "관광지",
+      "categoryName": "역사/전통",
+      "distanceInMeters": null
+    }
+  ]
+}
+```
+
+### 4.5 매거진 카드뉴스에 매핑된 장소 썸네일 목록 조회
+```
+GET http://localhost:8080/api/magazines/1/places/thumbnails?count=3
+```
+
+**Query Parameters:**
+- `count` (optional, default: 3): 조회할 개수
+
+**설명:**
+- 매거진 상세: 마지막 페이지에서 호출합니다. (관광지 보러가기 버튼 상단)
+- 매거진 ID를 받아 해당 매거진의 카드뉴스에 연결된 Place 중 요청된 개수만큼을 반환합니다.
+- 장소 ID, 장소 이름, 장소 썸네일을 리스트로 반환합니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "placeId": 1,
+      "name": "경주 불국사",
+      "thumbnailUrl": "https://s3.../photo.jpg"
+    },
+    {
+      "placeId": 2,
+      "name": "경주 석굴암",
+      "thumbnailUrl": "https://s3.../photo.jpg"
+    }
+  ]
 }
 ```
 
@@ -777,13 +890,22 @@ Content-Type: application/json
 }
 ```
 
-### 6.2 장소 사진 추가
+### 6.2 장소 사진 추가 (여러 장)
 ```
 POST http://localhost:8080/api/admin/places/1/photos
 Content-Type: application/json
 
 {
-  "photoUrl": "https://s3.../place-photo1.jpg"
+  "photos": [
+    {
+      "photoUrl": "https://s3.../place-photo1.jpg",
+      "order": 0
+    },
+    {
+      "photoUrl": "https://s3.../place-photo2.jpg",
+      "order": 1
+    }
+  ]
 }
 ```
 
@@ -791,18 +913,125 @@ Content-Type: application/json
 - `placeId` (required): 장소 ID
 
 **Request Body:**
-- `photoUrl` (required): 사진 URL (AWS S3 URL)
+- `photos` (required): 사진 정보 리스트 (최소 1개)
+  - `photoUrl` (required): 사진 URL (AWS S3 URL)
+  - `order` (required): 사진 순서 (0부터 시작)
 
 **응답 예시:**
 ```json
 {
   "success": true,
   "message": "장소 사진이 추가되었습니다.",
+  "data": [1, 2]  // 생성된 사진 ID 리스트
+}
+```
+
+### 6.3 장소 수정
+```
+PUT http://localhost:8080/api/admin/places/1
+Content-Type: application/json
+
+{
+  "name": "경주 불국사 (수정)",
+  "address": "경상북도 경주시 불국로 385",
+  "latitude": 35.7894,
+  "longitude": 129.3320,
+  "summary": "신라 불교 문화의 정수를 보여주는 사찰 (수정)",
+  "information": "불국사는 신라 경덕왕 10년(751)에 김대성이 창건을 시작하여...",
+  "group": "관광지",
+  "category": "역사_전통",
+  "photos": [
+    {
+      "photoUrl": "https://s3.../place-photo1.jpg",
+      "order": 0
+    },
+    {
+      "photoUrl": "https://s3.../place-photo2.jpg",
+      "order": 1
+    }
+  ]
+}
+```
+
+**⚠️ 중요**: PUT 요청이므로 **Request Body**에 JSON 데이터를 넣어야 합니다.
+
+**Postman 사용법:**
+1. Method: `PUT` 선택
+2. URL: `http://localhost:8080/api/admin/places/{placeId}` (예: `http://localhost:8080/api/admin/places/1`)
+3. Headers 탭에서 `Content-Type: application/json` 추가
+4. Body 탭 선택 → `raw` 선택 → `JSON` 선택
+5. 아래 JSON 데이터를 Body에 복사하여 붙여넣기
+
+**Path Parameters:**
+- `placeId` (required): 장소 ID
+
+**Request Body:**
+- `name` (optional): 장소 이름
+- `address` (optional): 한글 주소
+- `latitude` (optional): 위도
+- `longitude` (optional): 경도
+- `summary` (optional): 요약
+- `information` (optional): 상세 정보
+- `group` (optional): 대분류 (`관광지`, `맛집`, `카페`)
+- `category` (optional): 세부 카테고리 (`자연_힐링`, `역사_전통`, `문화_체험`, `식도락`)
+- `photos` (optional): 사진 정보 리스트
+  - `photoUrl` (required): 사진 URL (빈 문자열("")이면 해당 사진 비활성화)
+  - `order` (required): 사진 순서 (0부터 시작)
+
+**정보만 수정하는 예시 (사진 유지):**
+```json
+{
+  "name": "경주 불국사 (수정)",
+  "summary": "새로운 요약"
+}
+```
+
+**사진만 수정하는 예시:**
+```json
+{
+  "name": "경주 불국사",
+  "photos": [
+    {
+      "photoUrl": "https://s3.../new-photo1.jpg",
+      "order": 0
+    },
+    {
+      "photoUrl": "https://s3.../new-photo2.jpg",
+      "order": 1
+    }
+  ]
+}
+```
+
+**사진 비활성화 예시:**
+```json
+{
+  "name": "경주 불국사",
+  "photos": [
+    {
+      "photoUrl": "",  // 빈 문자열이면 order 0의 사진이 비활성화됨
+      "order": 0
+    }
+  ]
+}
+```
+
+**⚠️ 주의사항:**
+- 요청에 포함된 필드만 업데이트되며, 생략된 필드는 기존 값을 유지합니다.
+- 사진 정보(photos)가 포함된 경우, order 값에 따라 기존 사진을 업데이트하거나 새로 생성하며, photoUrl이 빈 문자열("")이면 해당 order의 사진을 비활성화합니다.
+- 요청에 없는 order의 사진은 유지됩니다 (비활성화되지 않음).
+- `photos`를 포함하지 않으면 사진은 변경되지 않습니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "장소가 수정되었습니다.",
   "data": 1
 }
 ```
 
-### 6.3 매거진 생성
+### 6.4 매거진 생성
 ```
 POST http://localhost:8080/api/admin/magazines
 Content-Type: application/json
@@ -827,7 +1056,9 @@ Content-Type: application/json
 - `name` (required): 매거진 이름
 - `summary` (optional): 매거진 요약
 - `content` (optional): 매거진 내용
-- `cardUrls` (optional): 매거진 카드 이미지 URL 리스트 (순서대로 저장됨)
+- `cards` (optional): 매거진 카드 정보 리스트
+  - `order` (required): 카드 순서 (0부터 시작)
+  - `cardUrl` (required): 카드 이미지 URL
 
 **전체 예시 (카드 포함):**
 ```json
@@ -835,10 +1066,19 @@ Content-Type: application/json
   "name": "경주 여행 완벽 가이드",
   "summary": "경주의 대표 관광지를 한눈에 볼 수 있는 가이드",
   "content": "경주는 신라 천년의 고도로, 불국사와 석굴암을 비롯한 많은 문화유산이 있습니다. 이 매거진에서는 경주의 주요 관광지를 소개합니다.",
-  "cardUrls": [
-    "https://s3.../magazine-card1.jpg",
-    "https://s3.../magazine-card2.jpg",
-    "https://s3.../magazine-card3.jpg"
+  "cards": [
+    {
+      "order": 0,
+      "cardUrl": "https://s3.../magazine-card1.jpg"
+    },
+    {
+      "order": 1,
+      "cardUrl": "https://s3.../magazine-card2.jpg"
+    },
+    {
+      "order": 2,
+      "cardUrl": "https://s3.../magazine-card3.jpg"
+    }
   ]
 }
 ```
@@ -854,16 +1094,22 @@ Content-Type: application/json
 ```json
 {
   "name": "경주 관광 가이드",
-  "cardUrls": [
-    "https://s3.../card1.jpg",
-    "https://s3.../card2.jpg"
+  "cards": [
+    {
+      "order": 0,
+      "cardUrl": "https://s3.../card1.jpg"
+    },
+    {
+      "order": 1,
+      "cardUrl": "https://s3.../card2.jpg"
+    }
   ]
 }
 ```
 
 **참고:**
-- `cardUrls` 배열의 순서대로 카드가 저장됩니다 (order 필드에 0부터 순서대로 저장됨)
-- 카드 수정은 매거진 수정 API(`PUT /api/admin/magazines/{magazineId}`)를 사용하세요
+- `cards` 배열의 각 카드는 `order`와 `cardUrl`을 명시적으로 지정해야 합니다.
+- 카드 수정은 매거진 수정 API(`PUT /api/admin/magazines/{magazineId}`)를 사용하세요.
 
 **응답 예시:**
 ```json
@@ -888,19 +1134,24 @@ Content-Type: application/json
    - `name: ""` 전송
    - 예상 응답: `400 Bad Request` + 에러 메시지
 
-### 6.4 매거진 수정
+### 6.5 매거진 수정
 ```
-PUT http://localhost:8080/api/admin/magazines/{magazineId}
+PUT http://localhost:8080/api/admin/magazines/1
 Content-Type: application/json
 
 {
   "name": "경주 여행 완벽 가이드 (수정)",
   "summary": "경주의 대표 관광지를 한눈에 볼 수 있는 가이드",
   "content": "경주는 신라 천년의 고도로...",
-  "cardUrls": [
-    "https://s3.../magazine-card1.jpg",
-    "https://s3.../magazine-card2.jpg",
-    "https://s3.../magazine-card3.jpg"
+  "cards": [
+    {
+      "order": 0,
+      "cardUrl": "https://s3.../magazine-card1.jpg"
+    },
+    {
+      "order": 1,
+      "cardUrl": "https://s3.../magazine-card2.jpg"
+    }
   ]
 }
 ```
@@ -918,7 +1169,9 @@ Content-Type: application/json
 - `name` (required): 매거진 이름
 - `summary` (optional): 매거진 요약
 - `content` (optional): 매거진 내용
-- `cardUrls` (optional): 매거진 카드 이미지 URL 리스트 (기존 카드는 모두 삭제되고 새로운 카드로 교체됨)
+- `cards` (optional): 매거진 카드 정보 리스트
+  - `order` (required): 카드 순서 (0부터 시작)
+  - `cardUrl` (required): 카드 이미지 URL (빈 문자열("")이면 해당 카드 비활성화)
 
 **전체 예시:**
 ```json
@@ -926,21 +1179,36 @@ Content-Type: application/json
   "name": "경주 여행 완벽 가이드 (수정)",
   "summary": "경주의 대표 관광지를 한눈에 볼 수 있는 가이드",
   "content": "경주는 신라 천년의 고도로, 불국사와 석굴암을 비롯한 많은 문화유산이 있습니다.",
-  "cardUrls": [
-    "https://s3.../magazine-card1.jpg",
-    "https://s3.../magazine-card2.jpg",
-    "https://s3.../magazine-card3.jpg"
+  "cards": [
+    {
+      "order": 0,
+      "cardUrl": "https://s3.../magazine-card1.jpg"
+    },
+    {
+      "order": 1,
+      "cardUrl": "https://s3.../magazine-card2.jpg"
+    },
+    {
+      "order": 2,
+      "cardUrl": "https://s3.../magazine-card3.jpg"
+    }
   ]
 }
 ```
 
-**카드만 교체하는 예시:**
+**카드만 수정하는 예시:**
 ```json
 {
   "name": "경주 여행 완벽 가이드",
-  "cardUrls": [
-    "https://s3.../new-card1.jpg",
-    "https://s3.../new-card2.jpg"
+  "cards": [
+    {
+      "order": 0,
+      "cardUrl": "https://s3.../new-card1.jpg"
+    },
+    {
+      "order": 1,
+      "cardUrl": "https://s3.../new-card2.jpg"
+    }
   ]
 }
 ```
@@ -954,10 +1222,24 @@ Content-Type: application/json
 }
 ```
 
+**카드 비활성화 예시:**
+```json
+{
+  "name": "경주 여행 완벽 가이드",
+  "cards": [
+    {
+      "order": 1,
+      "cardUrl": ""  // 빈 문자열이면 order 1의 카드가 비활성화됨
+    }
+  ]
+}
+```
+
 **⚠️ 주의사항:**
-- `cardUrls`를 포함하면 기존 카드가 모두 삭제되고 새로운 카드로 교체됩니다
-- `cardUrls`를 포함하지 않으면 카드는 변경되지 않습니다
-- `cardUrls`는 빈 배열 `[]`로도 전송 가능합니다 (모든 카드 삭제)
+- `cards`가 포함된 경우, `order` 값에 따라 기존 카드를 업데이트하거나 새로 생성합니다.
+- `cardUrl`이 빈 문자열("")이면 해당 `order`의 카드를 비활성화합니다.
+- 요청에 없는 `order`의 카드는 유지됩니다 (비활성화되지 않음).
+- `cards`를 포함하지 않으면 카드는 변경되지 않습니다.
 
 **응답 예시:**
 ```json
@@ -971,22 +1253,98 @@ Content-Type: application/json
 **테스트 시나리오:**
 
 1. **정상 수정 (카드 포함):**
-   - Request Body에 `name`과 `cardUrls` 포함하여 전송
+   - Request Body에 `name`과 `cards` 포함하여 전송
    - 예상 응답: `200 OK` + 수정된 매거진 ID
 
 2. **정보만 수정 (카드 유지):**
-   - Request Body에 `name`, `summary`, `content`만 포함 (cardUrls 제외)
-   - 예상 응답: `200 OK` + 수정된 매거진 ID
+   - Request Body에 `name`, `summary`, `content`만 포함 (cards 제외)
+   - 예상 응답: `200 OK` + 수정된 매거진 ID (카드는 변경되지 않음)
 
-3. **카드만 교체:**
-   - Request Body에 `name`과 `cardUrls` 포함
-   - 예상 응답: `200 OK` + 기존 카드는 삭제되고 새로운 카드로 교체됨
+3. **카드만 수정:**
+   - Request Body에 `name`과 `cards` 포함
+   - 예상 응답: `200 OK` + 요청된 order의 카드만 업데이트/생성됨
 
-4. **매거진 없음:**
+4. **카드 비활성화:**
+   - Request Body에 `name`과 `cards` 포함 (일부 카드의 `cardUrl`을 빈 문자열("")로 설정)
+   - 예상 응답: `200 OK` + 빈 문자열인 카드는 비활성화됨
+
+5. **매거진 없음:**
    - 존재하지 않는 `magazineId` 전송
    - 예상 응답: `404 Not Found` + 에러 메시지
 
-### 6.5 공식 광고 생성
+### 6.6 태그 목록 조회
+```
+GET http://localhost:8080/api/admin/tags
+```
+
+**설명:**
+- 전체 태그 목록을 조회합니다.
+- 태그 ID와 태그 이름을 반환합니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "tagId": 1,
+      "name": "경주"
+    },
+    {
+      "tagId": 2,
+      "name": "관광지"
+    }
+  ]
+}
+```
+
+### 6.7 태그 생성
+```
+POST http://localhost:8080/api/admin/tags
+Content-Type: application/json
+
+{
+  "name": "사진명소"
+}
+```
+
+**⚠️ 중요**: POST 요청이므로 **Request Body**에 JSON 데이터를 넣어야 합니다.
+
+**Request Body:**
+- `name` (required): 태그 이름 (중복 불가)
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "태그가 생성되었습니다.",
+  "data": 1
+}
+```
+
+### 6.8 매거진에 태그 추가
+```
+POST http://localhost:8080/api/admin/magazines/1/tags/1
+```
+
+**Path Parameters:**
+- `magazineId` (required): 매거진 ID
+- `tagId` (required): 태그 ID
+
+**설명:**
+- 매거진에 태그를 추가합니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "매거진에 태그가 추가되었습니다.",
+  "data": 1
+}
+```
+
+### 6.9 공식 광고 생성
 ```
 POST http://localhost:8080/api/admin/advertise/official
 Content-Type: application/json
@@ -1020,7 +1378,7 @@ Content-Type: application/json
 }
 ```
 
-### 6.6 개인 광고 생성
+### 6.10 개인 광고 생성
 ```
 POST http://localhost:8080/api/admin/advertise/private
 Content-Type: application/json
@@ -1047,7 +1405,7 @@ Content-Type: application/json
 }
 ```
 
-### 6.6 전체 장소 목록 조회 (간단 정보, 관리자용)
+### 6.11 전체 장소 목록 조회 (간단 정보, 관리자용)
 ```
 GET http://localhost:8080/api/admin/places/list
 ```
@@ -1074,7 +1432,7 @@ GET http://localhost:8080/api/admin/places/list
 }
 ```
 
-### 6.7 전체 리뷰 목록 조회 (관리자용)
+### 6.12 전체 리뷰 목록 조회 (관리자용)
 ```
 GET http://localhost:8080/api/admin/reviews/list
 ```
@@ -1142,7 +1500,7 @@ if (pm.response.code === 200) {
 1. `GET /api/places?category=자연/힐링&count=5` - 카테고리별 장소 조회
 2. `GET /api/places/1/nearby?count=10` - 근처 가볼만한 곳 조회 (거리 순)
 3. `GET /api/places/1/nearby/group?group=맛집&count=6` - 근처 가볼만한 곳 조회 (대분류별, 좋아요 순)
-4. `GET /api/places/list` - 전체 장소 목록 조회 (간단 정보)
+4. `GET /api/admin/places/list` - 전체 장소 목록 조회 (간단 정보, 관리자용)
 5. `POST /api/places/1/like` - 좋아요 추가 (로그인 필요)
 
 ### 시나리오 2: 리뷰 작성 및 조회
@@ -1160,17 +1518,23 @@ if (pm.response.code === 200) {
 1. `GET /api/magazines?size=5` - 매거진 목록 조회 (첫 페이지)
 2. `GET /api/magazines?lastMagazineId=123&size=5` - 매거진 목록 조회 (다음 페이지)
 3. `GET /api/magazines/1` - 매거진 상세 조회
-4. `POST /api/magazines/1/like` - 좋아요 토글 (로그인 필요)
+4. `GET /api/magazines/1/places` - 매거진 카드뉴스에 매핑된 장소 목록 조회
+5. `GET /api/magazines/1/places/thumbnails?count=3` - 매거진 카드뉴스에 매핑된 장소 썸네일 목록 조회
+6. `POST /api/magazines/1/like` - 좋아요 토글 (로그인 필요)
 
 ### 시나리오 4: 관리자가 데이터 생성 (전체 플로우)
 1. `POST /api/admin/places` - 장소 생성
-3. `POST /api/admin/places/photos` - 장소 사진 추가 (여러 번)
+2. `POST /api/admin/places/1/photos` - 장소 사진 추가 (여러 장 한번에)
+3. `PUT /api/admin/places/1` - 장소 수정 (사진 포함)
 4. `POST /api/admin/magazines` - 매거진 생성
 5. `PUT /api/admin/magazines/1` - 매거진 수정 (카드 포함)
-6. `POST /api/admin/advertise/official` - 공식 광고 생성
-7. `GET /api/places/1` - 생성된 장소 확인
-8. `GET /api/magazines/1` - 생성된 매거진 확인
-9. `GET /api/advertise/official` - 생성된 광고 확인
+6. `GET /api/admin/tags` - 태그 목록 조회
+7. `POST /api/admin/tags` - 태그 생성
+8. `POST /api/admin/magazines/1/tags/1` - 매거진에 태그 추가
+9. `POST /api/admin/advertise/official` - 공식 광고 생성
+10. `GET /api/places/1` - 생성된 장소 확인
+11. `GET /api/magazines/1` - 생성된 매거진 확인
+12. `GET /api/advertise/official` - 생성된 광고 확인
 
 ---
 

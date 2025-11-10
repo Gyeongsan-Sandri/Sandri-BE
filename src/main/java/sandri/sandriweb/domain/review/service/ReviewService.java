@@ -6,7 +6,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import sandri.sandriweb.domain.review.dto.AdminReviewListDto;
+import sandri.sandriweb.domain.review.dto.ReviewListDto;
 import sandri.sandriweb.domain.review.dto.CursorResponseDto;
 import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.place.entity.Place;
@@ -22,7 +22,9 @@ import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.global.service.S3Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -114,25 +116,64 @@ public class ReviewService {
         review.update(request.getRating(), request.getContent());
         PlaceReview updatedReview = placeReviewRepository.save(review);
 
-        // 기존 사진 삭제 (엔티티만 삭제, S3에서는 삭제하지 않음)
-        List<PlaceReviewPhoto> existingPhotos = placeReviewPhotoRepository.findByPlaceReviewId(reviewId);
-        if (!existingPhotos.isEmpty()) {
-            placeReviewPhotoRepository.deleteAll(existingPhotos);
-        }
-
-        // 새로운 사진 저장
-        List<PlaceReviewPhoto> newPhotos = new ArrayList<>();
+        // 사진 업데이트 (요청에 photos가 포함된 경우)
         if (request.getPhotos() != null && !request.getPhotos().isEmpty()) {
-            newPhotos = request.getPhotos().stream()
-                    .map(photoInfo -> PlaceReviewPhoto.builder()
-                            .placeReview(updatedReview)
-                            .place(updatedReview.getPlace())
-                            .photoUrl(photoInfo.getPhotoUrl())
-                            .order(photoInfo.getOrder())
-                            .build())
-                    .collect(Collectors.toList());
+            // 기존 enabled된 사진 조회
+            List<PlaceReviewPhoto> existingPhotos = placeReviewPhotoRepository.findEnabledByReviewId(reviewId);
+            
+            // 기존 사진을 order로 매핑
+            Map<Integer, PlaceReviewPhoto> existingPhotosByOrder = new HashMap<>();
+            if (!existingPhotos.isEmpty()) {
+                existingPhotosByOrder = existingPhotos.stream()
+                        .collect(Collectors.toMap(
+                                PlaceReviewPhoto::getOrder,
+                                photo -> photo,
+                                (existing, replacement) -> existing // 중복 시 기존 것 유지
+                        ));
+            }
 
-            placeReviewPhotoRepository.saveAll(newPhotos);
+            // 요청된 사진 정보로 업데이트 또는 생성
+            List<PlaceReviewPhoto> photosToSave = new ArrayList<>();
+            for (CreateReviewRequestDto.PhotoInfo photoInfo : request.getPhotos()) {
+                Integer order = photoInfo.getOrder();
+                String photoUrl = photoInfo.getPhotoUrl();
+                
+                // photoUrl이 빈 문자열이면 disable 처리
+                if (photoUrl != null && photoUrl.trim().isEmpty()) {
+                    PlaceReviewPhoto existingPhoto = existingPhotosByOrder.get(order);
+                    if (existingPhoto != null) {
+                        existingPhoto.disable();
+                        photosToSave.add(existingPhoto);
+                    }
+                } else if (photoUrl != null && !photoUrl.trim().isEmpty()) {
+                    // photoUrl이 있으면 업데이트 또는 생성
+                    PlaceReviewPhoto existingPhoto = existingPhotosByOrder.get(order);
+                    if (existingPhoto != null) {
+                        // 기존 사진이 있으면 URL만 업데이트하고 enable
+                        existingPhoto.updatePhotoUrl(photoUrl);
+                        existingPhoto.enable();
+                        photosToSave.add(existingPhoto);
+                    } else {
+                        // 기존 사진이 없으면 새로 생성
+                        PlaceReviewPhoto newPhoto = PlaceReviewPhoto.builder()
+                                .placeReview(updatedReview)
+                                .place(updatedReview.getPlace())
+                                .photoUrl(photoUrl)
+                                .order(order)
+                                .enabled(true)
+                                .build();
+                        photosToSave.add(newPhoto);
+                    }
+                }
+            }
+            
+            // 변경사항 저장
+            if (!photosToSave.isEmpty()) {
+                placeReviewPhotoRepository.saveAll(photosToSave);
+            }
+
+            log.info("리뷰 사진 업데이트 완료: reviewId={}, processedCount={}", 
+                     reviewId, request.getPhotos().size());
         }
 
         log.info("리뷰 수정 완료: reviewId={}, userId={}", reviewId, userId);
@@ -289,12 +330,12 @@ public class ReviewService {
      * @return 전체 리뷰 목록 (reviewId, content)
      */
     @Transactional(readOnly = true)
-    public List<AdminReviewListDto> getAllReviews() {
+    public List<ReviewListDto> getAllReviews() {
         List<PlaceReview> reviews = placeReviewRepository.findAll();
         
         return reviews.stream()
                 .filter(PlaceReview::isEnabled) // enabled된 것만
-                .map(review -> AdminReviewListDto.builder()
+                .map(review -> ReviewListDto.builder()
                         .reviewId(review.getId())
                         .content(review.getContent())
                         .build())

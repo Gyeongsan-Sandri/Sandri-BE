@@ -3,6 +3,7 @@ package sandri.sandriweb.domain.magazine.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import sandri.sandriweb.domain.magazine.entity.mapping.MagazineTag;
 import sandri.sandriweb.global.entity.BaseEntity;
 
 import java.util.ArrayList;
@@ -21,9 +22,8 @@ public class Magazine extends BaseEntity {
     @Column(name = "magazine_id")
     private Long id;
 
-    @Column(name = "name", nullable = false)
+    @Column(name = "name", nullable = false, unique = true)
     private String name;
-
 
     @Column(name = "summary")
     private String summary;
@@ -32,7 +32,10 @@ public class Magazine extends BaseEntity {
     private String content;
 
     @OneToMany(mappedBy = "magazine", fetch = FetchType.LAZY, orphanRemoval = true, cascade = CascadeType.ALL)
-    List<MagazineCard> cards = new ArrayList<>();
+    private List<MagazineCard> cards = new ArrayList<>();
+
+    @OneToMany(mappedBy = "magazine", fetch = FetchType.LAZY, orphanRemoval = true, cascade = CascadeType.ALL)
+    private List<MagazineTag> magazineTags = new ArrayList<>();
 
     /*
      * 매거진 정보 수정
