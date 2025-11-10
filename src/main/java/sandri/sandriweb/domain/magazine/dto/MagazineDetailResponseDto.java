@@ -21,6 +21,9 @@ public class MagazineDetailResponseDto {
     @Schema(description = "매거진 내용", example = "경주는 신라 천년의 고도로...")
     private String content;
     
+    @Schema(description = "사용자 좋아요 여부 (로그인하지 않은 경우 null)", example = "true")
+    private Boolean isLiked;
+    
     @Schema(description = "카드뉴스 총 개수", example = "5")
     private Integer cardCount;
     

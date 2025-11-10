@@ -31,5 +31,14 @@ public interface MagazineTagRepository extends JpaRepository<MagazineTag, Long> 
            "AND mt.enabled = true " +
            "AND (t.enabled = true OR t IS NULL)")
     List<MagazineTag> findByMagazineIdInWithTag(@Param("magazineIds") List<Long> magazineIds);
+    
+    /**
+     * 매거진 ID와 태그 ID로 MagazineTag 조회
+     * @param magazineId 매거진 ID
+     * @param tagId 태그 ID
+     * @return MagazineTag (enabled된 것만)
+     */
+    @Query("SELECT mt FROM MagazineTag mt WHERE mt.magazine.id = :magazineId AND mt.tag.id = :tagId AND mt.enabled = true")
+    java.util.Optional<MagazineTag> findByMagazineIdAndTagId(@Param("magazineId") Long magazineId, @Param("tagId") Long tagId);
 }
 

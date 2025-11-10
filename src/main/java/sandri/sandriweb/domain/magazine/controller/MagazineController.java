@@ -69,12 +69,14 @@ public class MagazineController {
     })
     public ResponseEntity<ApiResponseDto<MagazineDetailResponseDto>> getMagazineDetail(
             @Parameter(description = "매거진 ID", example = "1")
-            @PathVariable Long magazineId) {
+            @PathVariable Long magazineId,
+            @AuthenticationPrincipal User user) {
 
         log.info("매거진 상세 조회: magazineId={}", magazineId);
 
         try {
-            MagazineDetailResponseDto response = magazineService.getMagazineDetail(magazineId);
+            Long userId = extractUserId(user);
+            MagazineDetailResponseDto response = magazineService.getMagazineDetail(magazineId, userId);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (RuntimeException e) {
             return handleRuntimeException(e, "매거진 상세 조회");
@@ -147,58 +149,42 @@ public class MagazineController {
 
     @GetMapping("/{magazineId}/places")
     @Operation(summary = "매거진 카드뉴스에 매핑된 장소 목록 조회",
-               description = "매거진 상세: 마지막 페이지의 관광지 보러가기 버튼에서 호출합니다." +
-                             "매거진 ID를 받아 해당 매거진의 카드뉴스에 연결된 모든 Place를 SimplePlaceDto 리스트로 반환합니다. " +
-                             "로그인한 경우 사용자가 좋아요한 장소 여부도 함께 반환됩니다." +
-                             "SimplePlaceDto 리스트에서는 장소 ID, 장소 이름, 장소 썸네일, 장소 주소, 장소 카테고리, 사용자 좋아요 여부를 반환합니다. (기준 거리 필드 = null)")
+               description = "매거진 상세: 마지막 페이지의 관광지 보러가기 버튼 상단 혹은 버튼을 눌렀을 때 호출합니다." +
+                             "매거진 ID를 받아 해당 매거진의 카드뉴스에 연결된 Place를 반환합니다. " +
+                             "thumbnailOnly=true인 경우 장소 ID, 이름, 썸네일만 반환하며, count 파라미터로 개수를 제한할 수 있습니다. " +
+                             "thumbnailOnly가 false이거나 생략된 경우 모든 필드를 포함한 SimplePlaceDto를 반환합니다. (distanceInMeters 필드는 Null)" +
+                             "로그인한 경우 사용자가 좋아요한 장소 여부도 함께 반환됩니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "매거진 없음")
     })
-    public ResponseEntity<ApiResponseDto<List<SimplePlaceDto>>> getPlacesByMagazineId(
+    public ResponseEntity<ApiResponseDto<Object>> getPlacesByMagazineId(
             @Parameter(description = "매거진 ID", example = "1")
             @PathVariable Long magazineId,
+            @Parameter(description = "썸네일만 반환 여부", example = "false")
+            @RequestParam(defaultValue = "false") boolean thumbnailOnly,
+            @Parameter(description = "조회할 개수 (thumbnailOnly=true일 때만 적용)", example = "3")
+            @RequestParam(required = false) Integer count,
             @AuthenticationPrincipal User user) {
 
-        log.info("매거진 카드뉴스에 매핑된 장소 목록 조회: magazineId={}", magazineId);
+        log.info("매거진 카드뉴스에 매핑된 장소 목록 조회: magazineId={}, thumbnailOnly={}, count={}", magazineId, thumbnailOnly, count);
 
         try {
             Long userId = extractUserId(user);
-            List<SimplePlaceDto> response = magazineService.getPlacesByMagazineId(magazineId, userId);
-            return ResponseEntity.ok(ApiResponseDto.success(response));
+            
+            if (thumbnailOnly) {
+                int limit = count != null ? count : Integer.MAX_VALUE;
+                List<MagazinePlaceThumbnailDto> response = magazineService.getPlaceThumbnailsByMagazineId(magazineId, limit);
+                return ResponseEntity.ok(ApiResponseDto.success(response));
+            } else {
+                List<SimplePlaceDto> response = magazineService.getPlacesByMagazineId(magazineId, userId);
+                return ResponseEntity.ok(ApiResponseDto.success(response));
+            }
         } catch (RuntimeException e) {
             return handleRuntimeException(e, "매거진 카드뉴스에 매핑된 장소 목록 조회");
         } catch (Exception e) {
             return handleException(e, "매거진 카드뉴스에 매핑된 장소 목록 조회", "장소 목록을 조회하는 중 오류가 발생했습니다.");
-        }
-    }
-
-    @GetMapping("/{magazineId}/places/thumbnails")
-    @Operation(summary = "매거진 카드뉴스에 매핑된 장소 썸네일 목록 조회",
-               description = "매거진 상세: 마지막 페이지에서 호출합니다. (관광지 보러가기 버튼 상단)" +
-                             "매거진 ID를 받아 해당 매거진의 카드뉴스에 연결된 Place 중 요청된 개수만큼을 반환합니다. " +
-                             "장소 ID, 장소 이름, 장소 썸네일을 리스트로 반환합니다.")
-    @ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "매거진 없음")
-    })
-    public ResponseEntity<ApiResponseDto<List<MagazinePlaceThumbnailDto>>> getPlaceThumbnailsByMagazineId(
-            @Parameter(description = "매거진 ID", example = "1")
-            @PathVariable Long magazineId,
-            @Parameter(description = "조회할 개수", example = "3")
-            @RequestParam(defaultValue = "3") int count) {
-
-        log.info("매거진 카드뉴스에 매핑된 장소 썸네일 목록 조회: magazineId={}, count={}", magazineId, count);
-
-        try {
-            List<MagazinePlaceThumbnailDto> response = magazineService.getPlaceThumbnailsByMagazineId(magazineId, count);
-            return ResponseEntity.ok(ApiResponseDto.success(response));
-        } catch (RuntimeException e) {
-            return handleRuntimeException(e, "매거진 카드뉴스에 매핑된 장소 썸네일 목록 조회");
-        } catch (Exception e) {
-            return handleException(e, "매거진 카드뉴스에 매핑된 장소 썸네일 목록 조회", "장소 썸네일 목록을 조회하는 중 오류가 발생했습니다.");
         }
     }
 

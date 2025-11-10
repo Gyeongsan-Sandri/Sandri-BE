@@ -637,8 +637,9 @@ GET http://localhost:8080/api/magazines/1
 
 **설명:**
 - 매거진 상세 조회 시 호출합니다.
-- 매거진 ID, 매거진 내용, 카드뉴스 개수, 카드뉴스 리스트를 반환합니다.
+- 매거진 ID, 매거진 내용, 사용자 좋아요 여부, 카드뉴스 개수, 카드뉴스 리스트를 반환합니다.
 - 카드뉴스 리스트에서는 카드뉴스 순서(order), 카드뉴스 URL(cardUrl)을 반환합니다.
+- 로그인하지 않은 경우 좋아요 여부는 null입니다.
 
 **응답 예시:**
 ```json
@@ -649,6 +650,7 @@ GET http://localhost:8080/api/magazines/1
     "magazineId": 1,
     "content": "경주는 신라 천년의 고도로, 불국사와 석굴암을 비롯한 많은 문화유산이 있습니다.",
     "cardCount": 5,
+    "isLiked": true,
     "cards": [
       {
         "order": 0,
@@ -662,6 +664,8 @@ GET http://localhost:8080/api/magazines/1
   }
 }
 ```
+
+**참고**: 로그인한 경우 자동으로 `isLiked` 정보 포함
 
 ### 4.2 매거진 목록 조회 (커서 기반 페이징)
 ```
@@ -744,13 +748,24 @@ POST http://localhost:8080/api/magazines/1/like
 GET http://localhost:8080/api/magazines/1/places
 ```
 
+**Query Parameters:**
+- `thumbnailOnly` (optional, default: false): 썸네일만 반환 여부
+- `count` (optional): 조회할 개수 (thumbnailOnly=true일 때만 적용)
+
 **설명:**
 - 매거진 상세: 마지막 페이지의 관광지 보러가기 버튼에서 호출합니다.
-- 매거진 ID를 받아 해당 매거진의 카드뉴스에 연결된 모든 Place를 SimplePlaceDto 리스트로 반환합니다.
-- 로그인한 경우 사용자가 좋아요한 장소 여부도 함께 반환됩니다.
-- SimplePlaceDto 리스트에서는 장소 ID, 장소 이름, 장소 썸네일, 장소 주소, 장소 카테고리, 사용자 좋아요 여부를 반환합니다. (기준 거리 필드 = null)
+- 매거진 ID를 받아 해당 매거진의 카드뉴스에 연결된 Place를 반환합니다.
+- `thumbnailOnly=false`(기본값)인 경우: 모든 필드를 포함한 SimplePlaceDto 리스트를 반환합니다.
+  - 장소 ID, 장소 이름, 장소 썸네일, 장소 주소, 장소 카테고리, 사용자 좋아요 여부를 반환합니다. (기준 거리 필드 = null)
+- `thumbnailOnly=true`인 경우: 장소 ID, 이름, 썸네일만 반환하며, `count` 파라미터로 개수를 제한할 수 있습니다.
+- 로그인한 경우 사용자가 좋아요한 장소 여부도 함께 반환됩니다 (thumbnailOnly=false일 때만).
 
-**응답 예시:**
+**전체 정보 조회 예시:**
+```
+GET http://localhost:8080/api/magazines/1/places
+```
+
+**응답 예시 (전체 정보):**
 ```json
 {
   "success": true,
@@ -770,20 +785,12 @@ GET http://localhost:8080/api/magazines/1/places
 }
 ```
 
-### 4.5 매거진 카드뉴스에 매핑된 장소 썸네일 목록 조회
+**썸네일만 조회 예시:**
 ```
-GET http://localhost:8080/api/magazines/1/places/thumbnails?count=3
+GET http://localhost:8080/api/magazines/1/places?thumbnailOnly=true&count=3
 ```
 
-**Query Parameters:**
-- `count` (optional, default: 3): 조회할 개수
-
-**설명:**
-- 매거진 상세: 마지막 페이지에서 호출합니다. (관광지 보러가기 버튼 상단)
-- 매거진 ID를 받아 해당 매거진의 카드뉴스에 연결된 Place 중 요청된 개수만큼을 반환합니다.
-- 장소 ID, 장소 이름, 장소 썸네일을 리스트로 반환합니다.
-
-**응답 예시:**
+**응답 예시 (썸네일만):**
 ```json
 {
   "success": true,
@@ -1323,7 +1330,38 @@ Content-Type: application/json
 }
 ```
 
-### 6.8 매거진에 태그 추가
+### 6.8 태그 수정
+```
+PUT http://localhost:8080/api/admin/tags/1
+Content-Type: application/json
+
+{
+  "name": "수정된 태그 이름"
+}
+```
+
+**⚠️ 중요**: PUT 요청이므로 **Request Body**에 JSON 데이터를 넣어야 합니다.
+
+**Path Parameters:**
+- `tagId` (required): 태그 ID
+
+**Request Body:**
+- `name` (required): 새로운 태그 이름 (중복 불가)
+
+**설명:**
+- 기존 매거진 태그의 이름을 수정합니다.
+- 태그 이름은 중복될 수 없습니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "태그가 수정되었습니다.",
+  "data": 1
+}
+```
+
+### 6.9 매거진에 태그 추가
 ```
 POST http://localhost:8080/api/admin/magazines/1/tags/1
 ```
@@ -1344,7 +1382,103 @@ POST http://localhost:8080/api/admin/magazines/1/tags/1
 }
 ```
 
-### 6.9 공식 광고 생성
+### 6.10 매거진에서 태그 삭제
+```
+DELETE http://localhost:8080/api/admin/magazines/1/tags/1
+```
+
+**Path Parameters:**
+- `magazineId` (required): 매거진 ID
+- `tagId` (required): 태그 ID
+
+**설명:**
+- 매거진에서 태그를 삭제합니다. (소프트 삭제)
+- 매거진에 해당 태그가 추가되어 있지 않은 경우 404 에러가 발생합니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "매거진에서 태그가 삭제되었습니다.",
+  "data": 1
+}
+```
+
+**에러 응답 예시:**
+```json
+{
+  "success": false,
+  "message": "매거진에 해당 태그가 추가되어 있지 않습니다.",
+  "data": null
+}
+```
+
+### 6.11 매거진 카드에 장소 매핑
+```
+PUT http://localhost:8080/api/admin/magazines/1/cards/0/place/1
+```
+
+**Path Parameters:**
+- `magazineId` (required): 매거진 ID
+- `cardOrder` (required): 카드 순서 (0부터 시작)
+- `placeId` (required): 장소 ID
+
+**설명:**
+- 매거진 카드에 장소를 매핑합니다.
+- 카드는 매거진 ID와 order로 식별됩니다.
+- 일대일 매핑이므로 기존 매핑이 있으면 새로운 장소로 교체됩니다.
+- 비활성화된 장소는 매핑할 수 없습니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "매거진 카드에 장소가 매핑되었습니다.",
+  "data": 1
+}
+```
+
+**에러 응답 예시:**
+```json
+{
+  "success": false,
+  "message": "매거진 카드를 찾을 수 없습니다: magazineId=1, order=0",
+  "data": null
+}
+```
+
+### 6.12 매거진 카드에서 장소 매핑 해제
+```
+DELETE http://localhost:8080/api/admin/magazines/1/cards/0/place
+```
+
+**Path Parameters:**
+- `magazineId` (required): 매거진 ID
+- `cardOrder` (required): 카드 순서 (0부터 시작)
+
+**설명:**
+- 매거진 카드에서 장소 매핑을 해제합니다.
+- 카드는 매거진 ID와 order로 식별됩니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "매거진 카드에서 장소 매핑이 해제되었습니다.",
+  "data": 1
+}
+```
+
+**에러 응답 예시:**
+```json
+{
+  "success": false,
+  "message": "매거진 카드를 찾을 수 없습니다: 999",
+  "data": null
+}
+```
+
+### 6.13 공식 광고 생성
 ```
 POST http://localhost:8080/api/admin/advertise/official
 Content-Type: application/json
@@ -1378,7 +1512,7 @@ Content-Type: application/json
 }
 ```
 
-### 6.10 개인 광고 생성
+### 6.14 개인 광고 생성
 ```
 POST http://localhost:8080/api/admin/advertise/private
 Content-Type: application/json
@@ -1405,9 +1539,9 @@ Content-Type: application/json
 }
 ```
 
-### 6.11 전체 장소 목록 조회 (간단 정보, 관리자용)
+### 6.15 전체 장소 목록 조회 (간단 정보, 관리자용)
 ```
-GET http://localhost:8080/api/admin/places/list
+GET http://localhost:8080/api/admin/places
 ```
 
 **설명:**
@@ -1432,9 +1566,9 @@ GET http://localhost:8080/api/admin/places/list
 }
 ```
 
-### 6.12 전체 리뷰 목록 조회 (관리자용)
+### 6.16 전체 리뷰 목록 조회 (관리자용)
 ```
-GET http://localhost:8080/api/admin/reviews/list
+GET http://localhost:8080/api/admin/reviews
 ```
 
 **설명:**
@@ -1500,7 +1634,7 @@ if (pm.response.code === 200) {
 1. `GET /api/places?category=자연/힐링&count=5` - 카테고리별 장소 조회
 2. `GET /api/places/1/nearby?count=10` - 근처 가볼만한 곳 조회 (거리 순)
 3. `GET /api/places/1/nearby/group?group=맛집&count=6` - 근처 가볼만한 곳 조회 (대분류별, 좋아요 순)
-4. `GET /api/admin/places/list` - 전체 장소 목록 조회 (간단 정보, 관리자용)
+4. `GET /api/admin/places` - 전체 장소 목록 조회 (간단 정보, 관리자용)
 5. `POST /api/places/1/like` - 좋아요 추가 (로그인 필요)
 
 ### 시나리오 2: 리뷰 작성 및 조회
@@ -1518,8 +1652,8 @@ if (pm.response.code === 200) {
 1. `GET /api/magazines?size=5` - 매거진 목록 조회 (첫 페이지)
 2. `GET /api/magazines?lastMagazineId=123&size=5` - 매거진 목록 조회 (다음 페이지)
 3. `GET /api/magazines/1` - 매거진 상세 조회
-4. `GET /api/magazines/1/places` - 매거진 카드뉴스에 매핑된 장소 목록 조회
-5. `GET /api/magazines/1/places/thumbnails?count=3` - 매거진 카드뉴스에 매핑된 장소 썸네일 목록 조회
+4. `GET /api/magazines/1/places` - 매거진 카드뉴스에 매핑된 장소 목록 조회 (전체 정보)
+5. `GET /api/magazines/1/places?thumbnailOnly=true&count=3` - 매거진 카드뉴스에 매핑된 장소 썸네일 목록 조회
 6. `POST /api/magazines/1/like` - 좋아요 토글 (로그인 필요)
 
 ### 시나리오 4: 관리자가 데이터 생성 (전체 플로우)
@@ -1530,11 +1664,15 @@ if (pm.response.code === 200) {
 5. `PUT /api/admin/magazines/1` - 매거진 수정 (카드 포함)
 6. `GET /api/admin/tags` - 태그 목록 조회
 7. `POST /api/admin/tags` - 태그 생성
-8. `POST /api/admin/magazines/1/tags/1` - 매거진에 태그 추가
-9. `POST /api/admin/advertise/official` - 공식 광고 생성
-10. `GET /api/places/1` - 생성된 장소 확인
-11. `GET /api/magazines/1` - 생성된 매거진 확인
-12. `GET /api/advertise/official` - 생성된 광고 확인
+8. `PUT /api/admin/tags/1` - 태그 수정
+9. `POST /api/admin/magazines/1/tags/1` - 매거진에 태그 추가
+10. `DELETE /api/admin/magazines/1/tags/1` - 매거진에서 태그 삭제
+11. `PUT /api/admin/magazines/1/cards/0/place/1` - 매거진 카드에 장소 매핑
+12. `DELETE /api/admin/magazines/1/cards/0/place` - 매거진 카드에서 장소 매핑 해제
+13. `POST /api/admin/advertise/official` - 공식 광고 생성
+14. `GET /api/places/1` - 생성된 장소 확인
+15. `GET /api/magazines/1` - 생성된 매거진 확인
+16. `GET /api/advertise/official` - 생성된 광고 확인
 
 ---
 

@@ -11,7 +11,11 @@ import sandri.sandriweb.global.entity.BaseEntity;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-@Table(name = "magazine_cards")
+@Table(name = "magazine_cards",
+       uniqueConstraints = @UniqueConstraint(
+               name = "uk_magazine_order",
+               columnNames = {"magazine_id", "`order`"}
+       ))
 public class MagazineCard extends BaseEntity {
 
     @Id
@@ -39,5 +43,13 @@ public class MagazineCard extends BaseEntity {
      */
     public void updateCardUrl(String cardUrl) {
         this.cardUrl = cardUrl;
+    }
+
+    /**
+     * 장소 매핑 수정
+     * @param place 장소 (null이면 매핑 해제)
+     */
+    public void updatePlace(Place place) {
+        this.place = place;
     }
 }

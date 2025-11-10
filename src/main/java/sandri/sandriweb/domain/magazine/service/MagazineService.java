@@ -20,6 +20,7 @@ import sandri.sandriweb.domain.magazine.repository.UserMagazineRepository;
 import sandri.sandriweb.domain.place.dto.SimplePlaceDto;
 import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.repository.PlacePhotoRepository;
+import sandri.sandriweb.domain.place.repository.PlaceRepository;
 import sandri.sandriweb.domain.place.repository.UserPlaceRepository;
 import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
@@ -41,6 +42,7 @@ public class MagazineService {
     private final UserMagazineRepository userMagazineRepository;
     private final UserRepository userRepository;
     private final PlacePhotoRepository placePhotoRepository;
+    private final PlaceRepository placeRepository;
     private final UserPlaceRepository userPlaceRepository;
     private final TagRepository tagRepository;
     private final MagazineTagRepository magazineTagRepository;
@@ -51,28 +53,43 @@ public class MagazineService {
      * @return 매거진 상세 정보와 카드뉴스 리스트
      */
     @Transactional(readOnly = true)
-    public MagazineDetailResponseDto getMagazineDetail(Long magazineId) {
+    public MagazineDetailResponseDto getMagazineDetail(Long magazineId, Long userId) {
         // 1. 매거진과 카드를 함께 조회 (FETCH JOIN)
         Magazine magazine = magazineRepository.findByIdWithCards(magazineId)
                 .orElseThrow(() -> new RuntimeException("매거진을 찾을 수 없습니다."));
 
         // 2. MagazineCard를 DTO로 변환 (DB에서 이미 enabled 필터링 및 order 정렬됨)
+        // order를 0부터 연속적으로 재정렬 (불연속적인 order를 프론트엔드에 전달하지 않음)
         List<MagazineCardDto> cardDtos = new ArrayList<>();
         if (magazine.getCards() != null && !magazine.getCards().isEmpty()) {
-            cardDtos = magazine.getCards().stream()
-                    .map(this::convertToCardDto)
-                    .collect(Collectors.toList());
+            int index = 0;
+            for (MagazineCard card : magazine.getCards()) {
+                cardDtos.add(MagazineCardDto.builder()
+                        .order(index) // 0부터 연속적으로 재정렬
+                        .cardUrl(card.getCardUrl())
+                        .build());
+                index++;
+            }
         }
 
-        log.info("매거진 상세 조회: magazineId={}, cardCount={}, totalCardsFetched={}", 
+        // 3. 사용자 좋아요 여부 조회 (로그인한 경우)
+        Boolean isLiked = null;
+        if (userId != null) {
+            List<Long> likedIds = userMagazineRepository.findLikedMagazineIdsByUserId(userId, List.of(magazineId));
+            isLiked = likedIds.contains(magazineId);
+        }
+
+        log.info("매거진 상세 조회: magazineId={}, cardCount={}, totalCardsFetched={}, isLiked={}", 
                  magazineId, cardDtos.size(), 
-                 magazine.getCards() != null ? magazine.getCards().size() : 0);
+                 magazine.getCards() != null ? magazine.getCards().size() : 0,
+                 isLiked);
 
         // DTO 생성 및 반환
         return MagazineDetailResponseDto.builder()
                 .magazineId(magazine.getId())
                 .content(magazine.getContent())
                 .cardCount(cardDtos.size())
+                .isLiked(isLiked)
                 .cards(cardDtos)
                 .build();
     }
@@ -375,11 +392,16 @@ public class MagazineService {
             return List.of();
         }
 
-        List<Place> places = magazine.getCards().stream()
-                .filter(card -> card.getPlace() != null && card.getPlace().isEnabled())
-                .map(MagazineCard::getPlace)
-                .distinct() // 중복 제거
-                .collect(Collectors.toList());
+        // Place ID 기준으로 중복 제거 (같은 Place가 여러 카드에 매핑될 수 있으므로)
+        Map<Long, Place> placeMap = new HashMap<>();
+        for (MagazineCard card : magazine.getCards()) {
+            Place place = card.getPlace();
+            if (place != null && place.isEnabled()) {
+                placeMap.putIfAbsent(place.getId(), place); // ID 기준으로 unique하게 유지
+            }
+        }
+
+        List<Place> places = new ArrayList<>(placeMap.values());
 
         if (limit != null && limit > 0) {
             places = places.stream()
@@ -626,6 +648,64 @@ public class MagazineService {
                  magazineId, tagId, savedMagazineTag.getId());
         
         return savedMagazineTag.getId();
+    }
+
+    /**
+     * 매거진에서 태그 삭제 (비활성화)
+     * @param magazineId 매거진 ID
+     * @param tagId 태그 ID
+     * @return 삭제된 MagazineTag ID
+     */
+    @Transactional
+    public Long removeTagFromMagazine(Long magazineId, Long tagId) {
+        // MagazineTag 조회
+        MagazineTag magazineTag = magazineTagRepository.findByMagazineIdAndTagId(magazineId, tagId)
+                .orElseThrow(() -> new RuntimeException("매거진에 해당 태그가 추가되어 있지 않습니다."));
+        
+        // 태그 비활성화 (소프트 삭제)
+        magazineTag.disable();
+        magazineTagRepository.save(magazineTag);
+        
+        log.info("매거진에서 태그 삭제 완료: magazineId={}, tagId={}, magazineTagId={}", 
+                 magazineId, tagId, magazineTag.getId());
+        
+        return magazineTag.getId();
+    }
+
+    /**
+     * 매거진 카드에 장소 매핑 (또는 매핑 해제)
+     * @param magazineId 매거진 ID
+     * @param cardOrder 카드 순서
+     * @param placeId 장소 ID (null이면 매핑 해제)
+     * @return 매거진 카드 ID
+     */
+    @Transactional
+    public Long mapPlaceToCard(Long magazineId, Integer cardOrder, Long placeId) {
+        // 1. 매거진 카드 조회 (매거진 ID와 order로)
+        MagazineCard card = magazineCardRepository.findByMagazineIdAndOrder(magazineId, cardOrder)
+                .orElseThrow(() -> new RuntimeException("매거진 카드를 찾을 수 없습니다: magazineId=" + magazineId + ", order=" + cardOrder));
+
+        // 2. 장소 매핑 또는 해제
+        if (placeId != null) {
+            // 장소 조회 및 유효성 검사
+            Place place = placeRepository.findById(placeId)
+                    .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다: " + placeId));
+            
+            // 장소가 활성화되어 있는지 확인
+            if (!place.isEnabled()) {
+                throw new RuntimeException("비활성화된 장소는 매핑할 수 없습니다: " + placeId);
+            }
+            
+            // 장소 매핑
+            card.updatePlace(place);
+            log.info("매거진 카드에 장소 매핑 완료: magazineId={}, cardOrder={}, placeId={}", magazineId, cardOrder, placeId);
+        } else {
+            // 매핑 해제
+            card.updatePlace(null);
+            log.info("매거진 카드에서 장소 매핑 해제 완료: magazineId={}, cardOrder={}", magazineId, cardOrder);
+        }
+
+        return card.getId();
     }
 
     /**

@@ -6,9 +6,11 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import sandri.sandriweb.domain.review.entity.PlaceReview;
+import sandri.sandriweb.domain.review.entity.PlaceReviewPhoto;
 import sandri.sandriweb.domain.user.dto.UserProfileDto;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -55,15 +57,23 @@ public class ReviewDto {
     }
 
     public static ReviewDto from(PlaceReview review, boolean includeUser) {
-        List<PhotoDto> photos = review.getPhotos() != null 
+        // enabled된 사진만 필터링하고 order 순서로 정렬한 후, 0부터 연속적으로 재정렬
+        List<PlaceReviewPhoto> enabledPhotos = review.getPhotos() != null 
                 ? review.getPhotos().stream()
+                        .filter(photo -> photo.isEnabled()) // enabled된 사진만
                         .sorted((p1, p2) -> Integer.compare(p1.getOrder(), p2.getOrder())) // order 순서로 정렬
-                        .map(photo -> PhotoDto.builder()
-                                .photoUrl(photo.getPhotoUrl())
-                                .order(photo.getOrder())
-                                .build())
                         .collect(Collectors.toList())
                 : List.of();
+        
+        // order를 0부터 연속적으로 재정렬
+        List<PhotoDto> photoDtos = new ArrayList<>();
+        int index = 0;
+        for (PlaceReviewPhoto photo : enabledPhotos) {
+            photoDtos.add(PhotoDto.builder()
+                    .photoUrl(photo.getPhotoUrl())
+                    .order(index++) // 0부터 연속적으로 재정렬
+                    .build());
+        }
 
         return ReviewDto.builder()
                 .reviewId(review.getId())
@@ -71,7 +81,7 @@ public class ReviewDto {
                 .content(review.getContent())
                 .rating(review.getRating())
                 .createdAt(review.getCreatedAt())
-                .photos(photos)
+                .photos(photoDtos)
                 .build();
     }
 }

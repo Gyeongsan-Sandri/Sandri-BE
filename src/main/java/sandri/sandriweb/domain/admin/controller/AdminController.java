@@ -233,6 +233,39 @@ public class AdminController {
         }
     }
 
+    @PutMapping("/tags/{tagId}")
+    @Operation(summary = "태그 수정",
+               description = "기존 매거진 태그의 이름을 수정합니다. 태그 이름은 중복될 수 없습니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "태그 없음")
+    })
+    public ResponseEntity<ApiResponseDto<Long>> updateTag(
+            @Parameter(description = "태그 ID", example = "1")
+            @PathVariable Long tagId,
+            @Valid @RequestBody CreateTagRequestDto request) {
+
+        log.info("태그 수정 요청: tagId={}, name={}", tagId, request.getName());
+
+        try {
+            Long updatedTagId = magazineService.updateTag(tagId, request.getName());
+            return ResponseEntity.ok(ApiResponseDto.success("태그가 수정되었습니다.", updatedTagId));
+        } catch (RuntimeException e) {
+            log.error("태그 수정 실패: {}", e.getMessage());
+            if (e.getMessage().contains("찾을 수 없습니다")) {
+                return ResponseEntity.status(404)
+                        .body(ApiResponseDto.error(e.getMessage()));
+            }
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("태그 수정 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("태그 수정 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
     @PostMapping("/magazines/{magazineId}/tags/{tagId}")
     @Operation(summary = "매거진에 태그 추가",
                description = "매거진에 태그를 추가합니다.")
@@ -264,6 +297,112 @@ public class AdminController {
             log.error("매거진에 태그 추가 중 오류 발생: ", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponseDto.error("매거진에 태그를 추가하는 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/magazines/{magazineId}/tags/{tagId}")
+    @Operation(summary = "매거진에서 태그 삭제",
+               description = "매거진에서 태그 매핑을 해제합니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "삭제 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "매거진, 태그 또는 매핑 없음")
+    })
+    public ResponseEntity<ApiResponseDto<Long>> removeTagFromMagazine(
+            @Parameter(description = "매거진 ID", example = "1")
+            @PathVariable Long magazineId,
+            @Parameter(description = "태그 ID", example = "1")
+            @PathVariable Long tagId) {
+
+        log.info("매거진에서 태그 삭제 요청: magazineId={}, tagId={}", magazineId, tagId);
+
+        try {
+            Long magazineTagId = magazineService.removeTagFromMagazine(magazineId, tagId);
+            return ResponseEntity.ok(ApiResponseDto.success("매거진에서 태그가 삭제되었습니다.", magazineTagId));
+        } catch (RuntimeException e) {
+            log.error("매거진에서 태그 삭제 실패: {}", e.getMessage());
+            if (e.getMessage().contains("찾을 수 없습니다") || e.getMessage().contains("추가되어 있지 않습니다")) {
+                return ResponseEntity.status(404)
+                        .body(ApiResponseDto.error(e.getMessage()));
+            }
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("매거진에서 태그 삭제 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("매거진에서 태그를 삭제하는 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    @PutMapping("/magazines/{magazineId}/cards/{cardOrder}/place/{placeId}")
+    @Operation(summary = "매거진 카드에 장소 매핑",
+               description = "매거진 카드에 장소를 매핑합니다. " +
+                             "일대일 매핑이므로 기존 매핑이 있으면 새로운 장소로 교체됩니다. " +
+                             "카드는 매거진 ID와 order로 식별됩니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "매핑 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "매거진 카드 또는 장소 없음")
+    })
+    public ResponseEntity<ApiResponseDto<Long>> mapPlaceToCard(
+            @Parameter(description = "매거진 ID", example = "1")
+            @PathVariable Long magazineId,
+            @Parameter(description = "카드 순서 (0부터 시작)", example = "0")
+            @PathVariable Integer cardOrder,
+            @Parameter(description = "장소 ID", example = "1")
+            @PathVariable Long placeId) {
+
+        log.info("매거진 카드에 장소 매핑 요청: magazineId={}, cardOrder={}, placeId={}", magazineId, cardOrder, placeId);
+
+        try {
+            Long updatedCardId = magazineService.mapPlaceToCard(magazineId, cardOrder, placeId);
+            return ResponseEntity.ok(ApiResponseDto.success("매거진 카드에 장소가 매핑되었습니다.", updatedCardId));
+        } catch (RuntimeException e) {
+            log.error("매거진 카드에 장소 매핑 실패: {}", e.getMessage());
+            if (e.getMessage().contains("찾을 수 없습니다")) {
+                return ResponseEntity.status(404)
+                        .body(ApiResponseDto.error(e.getMessage()));
+            }
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("매거진 카드에 장소 매핑 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("매거진 카드에 장소를 매핑하는 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/magazines/{magazineId}/cards/{cardOrder}/place")
+    @Operation(summary = "매거진 카드에서 장소 매핑 해제",
+               description = "매거진 카드에서 매핑된 장소를 해제합니다. " +
+                             "카드는 매거진 ID와 order로 식별됩니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "매핑 해제 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "매거진 카드 없음")
+    })
+    public ResponseEntity<ApiResponseDto<Long>> unmapPlaceFromCard(
+            @Parameter(description = "매거진 ID", example = "1")
+            @PathVariable Long magazineId,
+            @Parameter(description = "카드 순서 (0부터 시작)", example = "0")
+            @PathVariable Integer cardOrder) {
+
+        log.info("매거진 카드에서 장소 매핑 해제 요청: magazineId={}, cardOrder={}", magazineId, cardOrder);
+
+        try {
+            Long updatedCardId = magazineService.mapPlaceToCard(magazineId, cardOrder, null);
+            return ResponseEntity.ok(ApiResponseDto.success("매거진 카드에서 장소 매핑이 해제되었습니다.", updatedCardId));
+        } catch (RuntimeException e) {
+            log.error("매거진 카드에서 장소 매핑 해제 실패: {}", e.getMessage());
+            if (e.getMessage().contains("찾을 수 없습니다")) {
+                return ResponseEntity.status(404)
+                        .body(ApiResponseDto.error(e.getMessage()));
+            }
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("매거진 카드에서 장소 매핑 해제 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("매거진 카드에서 장소 매핑을 해제하는 중 오류가 발생했습니다: " + e.getMessage()));
         }
     }
 
@@ -313,17 +452,17 @@ public class AdminController {
         }
     }
 
-    @GetMapping("/places/list")
-    @Operation(summary = "전체 장소 목록 조회 (간단 정보)",
-               description = "전체 관광지의 ID와 이름만 반환합니다." +
-                             "전체 DB 목록 확인용")
+    @GetMapping("/places")
+    @Operation(summary = "전체 장소 목록 조회 (간단 정보, 관리자용)",
+               description = "관리자가 전체 관광지의 ID와 이름만 조회합니다. " +
+                             "전체 DB 목록 확인용입니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    public ResponseEntity<ApiResponseDto<List<PlaceListDto>>> getPlaceLists() {
+    public ResponseEntity<ApiResponseDto<List<PlaceListDto>>> getAllPlaces() {
 
-        log.info("전체 장소 목록 조회");
+        log.info("전체 장소 목록 조회 (관리자)");
 
         try {
             List<PlaceListDto> response = placeService.getAllPlaces();
@@ -337,7 +476,7 @@ public class AdminController {
 
     // ========== 리뷰 관련 ==========
 
-    @GetMapping("/reviews/list")
+    @GetMapping("/reviews")
     @Operation(summary = "전체 리뷰 목록 조회 (관리자용)",
                description = "관리자가 전체 리뷰 목록을 조회합니다. 리뷰 ID와 리뷰 내용만 반환합니다.")
     @ApiResponses(value = {

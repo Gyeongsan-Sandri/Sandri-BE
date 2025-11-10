@@ -262,17 +262,34 @@ public class ReviewService {
         // 총 리뷰 사진 개수 조회
         Long totalCount = placeReviewPhotoRepository.countByPlaceId(placeId);
         
-        // 커서 기반 페이징 처리 (PhotoDto로 변환)
-        return buildCursorResponse(
-                allPhotos, 
-                size, 
-                photo -> ReviewDto.PhotoDto.builder()
-                        .photoUrl(photo.getPhotoUrl())
-                        .order(photo.getOrder())
-                        .build(),
-                PlaceReviewPhoto::getId, 
-                totalCount
-        );
+        // size + 1개를 확인하여 다음 페이지 존재 여부 판단
+        boolean hasNext = allPhotos.size() > size;
+        List<PlaceReviewPhoto> photos = hasNext 
+                ? allPhotos.subList(0, size) 
+                : allPhotos;
+        
+        // order를 0부터 연속적으로 재정렬 (각 페이지 내에서)
+        List<ReviewDto.PhotoDto> content = new ArrayList<>();
+        int index = 0;
+        for (PlaceReviewPhoto photo : photos) {
+            content.add(ReviewDto.PhotoDto.builder()
+                    .photoUrl(photo.getPhotoUrl())
+                    .order(index++) // 0부터 연속적으로 재정렬
+                    .build());
+        }
+        
+        // 다음 커서 설정
+        Long nextCursor = (hasNext && !photos.isEmpty()) 
+                ? photos.get(photos.size() - 1).getId() 
+                : null;
+        
+        return CursorResponseDto.<ReviewDto.PhotoDto>builder()
+                .content(content)
+                .size(size)
+                .nextCursor(nextCursor)
+                .hasNext(hasNext)
+                .totalCount(totalCount)
+                .build();
     }
 
     /**
