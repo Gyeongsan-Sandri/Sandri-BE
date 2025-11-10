@@ -1,5 +1,6 @@
 package sandri.sandriweb.domain.user.entity;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -116,11 +117,27 @@ public class User extends BaseEntity implements UserDetails {
         this.nickname = nickname;
     }
     
+    @Schema(description = "성별", allowableValues = {"MALE", "FEMALE", "OTHER"})
     public enum Gender {
         MALE, FEMALE, OTHER
     }
     
+    @Schema(
+            description = "여행 스타일 유형: ① 모험왕(실외+빡빡+로컬), ② 감성요정(실내+여유+감성), ③ 핫플 헌터(실외+빡빡+감성), ④ 현지인(실외+여유+로컬), ⑤ 철저 플래너(실내+빡빡+로컬), ⑥ 힐링 거북이(실내+여유+로컬), ⑦ 산책가(실외+여유+감성), ⑧ 갤러리피플(실내+빡빡+감성)",
+            allowableValues = {
+                "ADVENTURER", "SENSITIVE_FAIRY", "HOTSPOT_HUNTER", "LOCAL",
+                "THOROUGH_PLANNER", "HEALING_TURTLE", "WALKER", "GALLERY_PEOPLE"
+            },
+            example = "ADVENTURER"
+    )
     public enum TravelStyle {
-        ADVENTURE, RELAXATION, CULTURE, NATURE, FOOD, SHOPPING
+        ADVENTURER,         // ① 모험왕 (실외 + 빡빡 + 로컬)
+        SENSITIVE_FAIRY,    // ② 감성요정 (실내 + 여유 + 감성)
+        HOTSPOT_HUNTER,     // ③ 핫플 헌터 (실외 + 빡빡 + 감성)
+        LOCAL,              // ④ 현지인 (실외 + 여유 + 로컬)
+        THOROUGH_PLANNER,   // ⑤ 철저 플래너 (실내 + 빡빡 + 로컬)
+        HEALING_TURTLE,     // ⑥ 힐링 거북이 (실내 + 여유 + 로컬)
+        WALKER,             // ⑦ 산책가 (실외 + 여유 + 감성)
+        GALLERY_PEOPLE      // ⑧ 갤러리피플 (실내 + 빡빡 + 감성)
     }
 }

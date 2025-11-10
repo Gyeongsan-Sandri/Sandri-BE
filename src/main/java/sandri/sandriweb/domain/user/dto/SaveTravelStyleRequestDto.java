@@ -16,7 +16,15 @@ import sandri.sandriweb.domain.user.entity.User;
 public class SaveTravelStyleRequestDto {
     
     @NotNull(message = "여행 스타일은 필수입니다")
-    @Schema(description = "여행 스타일", example = "ADVENTURE", required = true, allowableValues = {"ADVENTURE", "RELAXATION", "CULTURE", "NATURE", "FOOD", "SHOPPING"})
+    @Schema(
+            description = "여행 스타일", 
+            example = "ADVENTURER", 
+            required = true, 
+            allowableValues = {
+                "ADVENTURER", "SENSITIVE_FAIRY", "HOTSPOT_HUNTER", "LOCAL",
+                "THOROUGH_PLANNER", "HEALING_TURTLE", "WALKER", "GALLERY_PEOPLE"
+            }
+    )
     private User.TravelStyle travelStyle;
 }
 
