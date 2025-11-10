@@ -16,8 +16,6 @@ public class UpdateRouteRequestDto {
     
     private String title;
     
-    private String description;
-    
     private LocalDate startDate;
     
     private LocalDate endDate;
