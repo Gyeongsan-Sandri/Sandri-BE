@@ -88,7 +88,7 @@ public class UserController {
     @PostMapping("/travel-style")
     @Operation(
             summary = "여행 스타일 저장",
-            description = "현재 로그인한 사용자의 여행 스타일을 저장합니다. 가능한 값: ADVENTURE, RELAXATION, CULTURE, NATURE, FOOD, SHOPPING",
+            description = "현재 로그인한 사용자의 여행 스타일을 저장합니다. 가능한 값: ADVENTURER(모험왕), SENSITIVE_FAIRY(감성요정), HOTSPOT_HUNTER(핫플 헌터), LOCAL(현지인), THOROUGH_PLANNER(철저 플래너), HEALING_TURTLE(힐링 거북이), WALKER(산책가), GALLERY_PEOPLE(갤러리피플)",
             requestBody = @RequestBody(
                     description = "여행 스타일 정보",
                     required = true,
@@ -96,7 +96,7 @@ public class UserController {
                             schema = @Schema(implementation = SaveTravelStyleRequestDto.class),
                             examples = @ExampleObject(
                                     name = "여행 스타일 저장 예제",
-                                    value = "{\n  \"travelStyle\": \"ADVENTURE\"\n}"
+                                    value = "{\n  \"travelStyle\": \"ADVENTURER\"\n}"
                             )
                     )
             )

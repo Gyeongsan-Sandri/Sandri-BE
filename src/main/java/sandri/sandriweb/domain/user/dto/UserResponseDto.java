@@ -49,7 +49,14 @@ public class UserResponseDto {
     @Schema(description = "계정 활성화 여부", example = "true")
     private boolean enabled;
     
-    @Schema(description = "여행 스타일", example = "ADVENTURE", allowableValues = {"ADVENTURE", "RELAXATION", "CULTURE", "NATURE", "FOOD", "SHOPPING"})
+    @Schema(
+            description = "여행 스타일", 
+            example = "ADVENTURER", 
+            allowableValues = {
+                "ADVENTURER", "SENSITIVE_FAIRY", "HOTSPOT_HUNTER", "LOCAL",
+                "THOROUGH_PLANNER", "HEALING_TURTLE", "WALKER", "GALLERY_PEOPLE"
+            }
+    )
     private User.TravelStyle travelStyle;
     
     public static UserResponseDto from(User user) {
