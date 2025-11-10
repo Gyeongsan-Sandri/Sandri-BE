@@ -17,9 +17,14 @@ import sandri.sandriweb.domain.magazine.dto.UpdateMagazineRequestDto;
 import sandri.sandriweb.domain.magazine.service.MagazineService;
 import sandri.sandriweb.domain.place.dto.CreatePlacePhotoRequestDto;
 import sandri.sandriweb.domain.place.dto.CreatePlaceRequestDto;
+import sandri.sandriweb.domain.place.dto.PlaceListDto;
 import sandri.sandriweb.domain.place.dto.UpdatePlaceRequestDto;
 import sandri.sandriweb.domain.place.service.PlaceService;
+import sandri.sandriweb.domain.review.dto.AdminReviewListDto;
+import sandri.sandriweb.domain.review.service.ReviewService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -31,6 +36,7 @@ public class AdminController {
     private final PlaceService placeService;
     private final MagazineService magazineService;
     private final AdvertiseService advertiseService;
+    private final ReviewService reviewService;
 
     // ========== 장소 관련 ==========
 
@@ -210,6 +216,51 @@ public class AdminController {
             log.error("개인 광고 생성 중 오류 발생: ", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponseDto.error("개인 광고 생성 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/places/list")
+    @Operation(summary = "전체 장소 목록 조회 (간단 정보)",
+               description = "전체 관광지의 ID와 이름만 반환합니다." +
+                             "전체 DB 목록 확인용")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    public ResponseEntity<ApiResponseDto<List<PlaceListDto>>> getPlaceLists() {
+
+        log.info("전체 장소 목록 조회");
+
+        try {
+            List<PlaceListDto> response = placeService.getAllPlaces();
+            return ResponseEntity.ok(ApiResponseDto.success(response));
+        } catch (Exception e) {
+            log.error("전체 장소 목록 조회 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("전체 장소 목록을 조회하는 중 오류가 발생했습니다."));
+        }
+    }
+
+    // ========== 리뷰 관련 ==========
+
+    @GetMapping("/reviews/list")
+    @Operation(summary = "전체 리뷰 목록 조회 (관리자용)",
+               description = "관리자가 전체 리뷰 목록을 조회합니다. 리뷰 ID와 리뷰 내용만 반환합니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    public ResponseEntity<ApiResponseDto<List<AdminReviewListDto>>> getAllReviews() {
+
+        log.info("전체 리뷰 목록 조회 (관리자)");
+
+        try {
+            List<AdminReviewListDto> response = reviewService.getAllReviews();
+            return ResponseEntity.ok(ApiResponseDto.success(response));
+        } catch (Exception e) {
+            log.error("전체 리뷰 목록 조회 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("전체 리뷰 목록을 조회하는 중 오류가 발생했습니다."));
         }
     }
 }
