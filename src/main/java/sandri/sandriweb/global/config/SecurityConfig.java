@@ -125,6 +125,7 @@ public class SecurityConfig {
     public CookieSerializer cookieSerializer() {
         DefaultCookieSerializer serializer = new DefaultCookieSerializer();
         serializer.setCookieName("JSESSIONID");
+        serializer.setDomainName(".sandri.site"); // 서브도메인 간 쿠키 공유 (sandri.site, www.sandri.site, api.sandri.site)
         serializer.setSameSite("None");
         serializer.setUseSecureCookie(true); // HTTPS 환경에서만 쿠키 전송
         serializer.setUseHttpOnlyCookie(true); // XSS 공격 방지
