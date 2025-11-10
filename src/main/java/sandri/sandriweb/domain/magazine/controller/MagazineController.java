@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.magazine.dto.MagazineDetailResponseDto;
+import sandri.sandriweb.domain.magazine.dto.MagazineListCursorResponseDto;
 import sandri.sandriweb.domain.magazine.service.MagazineService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
@@ -57,7 +58,7 @@ public class MagazineController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    public ResponseEntity<ApiResponseDto<sandri.sandriweb.domain.magazine.dto.MagazineListCursorResponseDto>> getMagazineList(
+    public ResponseEntity<ApiResponseDto<MagazineListCursorResponseDto>> getMagazineList(
             @Parameter(description = "마지막으로 받은 매거진 ID(첫 조회 시 생략)", example = "15")
             @RequestParam(required = false) Long lastMagazineId,
             @Parameter(description = "페이지 크기", example = "10")
