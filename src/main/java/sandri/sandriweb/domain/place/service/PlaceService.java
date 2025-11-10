@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import sandri.sandriweb.domain.admin.dto.CreatePlacePhotoRequestDto;
 import sandri.sandriweb.domain.place.dto.*;
 import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.entity.PlacePhoto;
@@ -22,6 +23,8 @@ import sandri.sandriweb.domain.review.service.ReviewService;
 import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -50,13 +53,16 @@ public class PlaceService {
         Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new RuntimeException("관광지를 찾을 수 없습니다."));
 
-        // 2. 공식 사진 조회 (order 순서대로)
-        List<PlaceDetailResponseDto.PhotoDto> officialPhotos = placePhotoRepository.findByPlaceId(placeId).stream()
-                .map(photo -> PlaceDetailResponseDto.PhotoDto.builder()
-                        .order(photo.getOrder())
-                        .photoUrl(photo.getPhotoUrl())
-                        .build())
-                .collect(Collectors.toList());
+        // 2. 공식 사진 조회 (enabled된 것만, order 순서대로 정렬 후 DTO 고유의 order 부여)
+        List<PlacePhoto> enabledPhotos = placePhotoRepository.findByPlaceId(placeId);
+        List<PlaceDetailResponseDto.PhotoDto> officialPhotos = new ArrayList<>();
+        int dtoOrder = 0;
+        for (PlacePhoto photo : enabledPhotos) {
+            officialPhotos.add(PlaceDetailResponseDto.PhotoDto.builder()
+                    .order(dtoOrder++) // DTO 고유의 order (0부터 시작)
+                    .photoUrl(photo.getPhotoUrl())
+                    .build());
+        }
 
         // 3. 평점 계산
         Double averageRating = reviewService.getAverageRating(placeId);
@@ -491,10 +497,28 @@ public class PlaceService {
             throw new RuntimeException("이미 존재하는 장소 이름입니다: " + request.getName());
         }
 
+        // 좌표 범위 검증
+        if (request.getLatitude() < -90 || request.getLatitude() > 90) {
+            throw new RuntimeException("위도는 -90 ~ 90 사이여야 합니다: " + request.getLatitude());
+        }
+        if (request.getLongitude() < -180 || request.getLongitude() > 180) {
+            throw new RuntimeException("경도는 -180 ~ 180 사이여야 합니다: " + request.getLongitude());
+        }
+
         // 위도/경도를 Point로 변환
         Point location = geometryFactory.createPoint(
                 new org.locationtech.jts.geom.Coordinate(request.getLongitude(), request.getLatitude())
         );
+
+        // 같은 location을 가진 enabled된 Place가 있으면 disable 처리 (거리 0m 이내)
+        List<Place> nearbyPlaces = placeRepository.findNearbyPlaces(location, 0.0, -1L, 1);
+        if (!nearbyPlaces.isEmpty()) {
+            Place existingPlace = nearbyPlaces.get(0);
+            existingPlace.disable();
+            placeRepository.save(existingPlace);
+            log.info("같은 location을 가진 기존 장소 비활성화: placeId={}, name={}", 
+                    existingPlace.getId(), existingPlace.getName());
+        }
 
         // Place 생성
         Place place = Place.builder()
@@ -552,39 +576,104 @@ public class PlaceService {
         );
 
         Place savedPlace = placeRepository.save(place);
+
+        // 사진 업데이트 (요청에 photos가 포함된 경우)
+        if (request.getPhotos() != null && !request.getPhotos().isEmpty()) {
+            // 기존 enabled된 사진 조회
+            List<PlacePhoto> existingPhotos = placePhotoRepository.findByPlaceId(placeId);
+            
+            // 기존 사진을 order로 매핑
+            Map<Integer, PlacePhoto> existingPhotosByOrder = new HashMap<>();
+            if (!existingPhotos.isEmpty()) {
+                existingPhotosByOrder = existingPhotos.stream()
+                        .collect(Collectors.toMap(
+                                PlacePhoto::getOrder,
+                                photo -> photo,
+                                (existing, replacement) -> existing // 중복 시 기존 것 유지
+                        ));
+            }
+
+            // 요청된 사진 정보로 업데이트 또는 생성
+            List<PlacePhoto> photosToSave = new ArrayList<>();
+            for (CreatePlacePhotoRequestDto.PhotoInfo photoInfo : request.getPhotos()) {
+                Integer order = photoInfo.getOrder();
+                String photoUrl = photoInfo.getPhotoUrl();
+                
+                // photoUrl이 빈 문자열이면 disable 처리
+                if (photoUrl != null && photoUrl.trim().isEmpty()) {
+                    PlacePhoto existingPhoto = existingPhotosByOrder.get(order);
+                    if (existingPhoto != null) {
+                        existingPhoto.disable();
+                        photosToSave.add(existingPhoto);
+                    }
+                } else if (photoUrl != null && !photoUrl.trim().isEmpty()) {
+                    // photoUrl이 있으면 업데이트 또는 생성
+                    PlacePhoto existingPhoto = existingPhotosByOrder.get(order);
+                    if (existingPhoto != null) {
+                        // 기존 사진이 있으면 URL만 업데이트하고 enable
+                        existingPhoto.updatePhotoUrl(photoUrl);
+                        existingPhoto.enable();
+                        photosToSave.add(existingPhoto);
+                    } else {
+                        // 기존 사진이 없으면 새로 생성
+                        PlacePhoto newPhoto = PlacePhoto.builder()
+                                .place(savedPlace)
+                                .photoUrl(photoUrl)
+                                .order(order)
+                                .enabled(true)
+                                .build();
+                        photosToSave.add(newPhoto);
+                    }
+                }
+            }
+            
+            // 변경사항 저장
+            if (!photosToSave.isEmpty()) {
+                placePhotoRepository.saveAll(photosToSave);
+            }
+
+            log.info("장소 사진 업데이트 완료: placeId={}, processedCount={}", 
+                     placeId, request.getPhotos().size());
+        }
+
         log.info("장소 수정 완료: placeId={}, name={}", savedPlace.getId(), savedPlace.getName());
 
         return savedPlace.getId();
     }
 
     /**
-     * 장소 사진 추가 (관리자용)
+     * 장소 사진 추가 (관리자용) - 여러 장 한번에 추가
      * @param placeId 장소 ID
-     * @param photoUrl 사진 URL
-     * @return 생성된 사진 ID
+     * @param photos 사진 정보 리스트 (photoUrl과 order 포함)
+     * @return 생성된 사진 ID 리스트
      */
     @Transactional
-    public Long createPlacePhoto(Long placeId, String photoUrl) {
+    public List<Long> createPlacePhotos(Long placeId, List<CreatePlacePhotoRequestDto.PhotoInfo> photos) {
         // 장소 조회
         Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
 
-        // 최대 order 값 조회 (새 사진의 order = MAX(order) + 1)
-        Integer maxOrder = placePhotoRepository.findMaxOrderByPlaceId(placeId);
-        int nextOrder = (maxOrder == null || maxOrder == -1) ? 0 : maxOrder + 1;
+        // PlacePhoto 리스트 생성
+        List<PlacePhoto> placePhotos = photos.stream()
+                .map(photoInfo -> PlacePhoto.builder()
+                        .place(place)
+                        .photoUrl(photoInfo.getPhotoUrl())
+                        .order(photoInfo.getOrder())
+                        .enabled(true)
+                        .build())
+                .collect(Collectors.toList());
 
-        // PlacePhoto 생성
-        PlacePhoto photo = PlacePhoto.builder()
-                .place(place)
-                .photoUrl(photoUrl)
-                .order(nextOrder)
-                .build();
+        // 일괄 저장
+        List<PlacePhoto> savedPhotos = placePhotoRepository.saveAll(placePhotos);
+        
+        List<Long> photoIds = savedPhotos.stream()
+                .map(PlacePhoto::getId)
+                .collect(Collectors.toList());
 
-        PlacePhoto savedPhoto = placePhotoRepository.save(photo);
-        log.info("장소 사진 추가 완료: photoId={}, placeId={}, order={}", 
-                 savedPhoto.getId(), placeId, savedPhoto.getOrder());
+        log.info("장소 사진 추가 완료: photoIds={}, placeId={}, count={}", 
+                 photoIds, placeId, savedPhotos.size());
 
-        return savedPhoto.getId();
+        return photoIds;
     }
 
     /**

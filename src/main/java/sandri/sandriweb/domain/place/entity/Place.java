@@ -10,6 +10,7 @@ import sandri.sandriweb.domain.place.enums.Category;
 import sandri.sandriweb.global.entity.BaseEntity;
 import org.locationtech.jts.geom.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -40,17 +41,17 @@ public class Place extends BaseEntity {
     @Column(name = "inform")
     private String information;
 
-    @OneToMany(mappedBy = "place")
-    List<PlacePhoto> photos;
+    @OneToMany(mappedBy = "place", fetch = FetchType.LAZY, orphanRemoval = true, cascade = CascadeType.ALL)
+    private List<PlacePhoto> photos = new ArrayList<>();
 
-    @OneToMany(mappedBy = "place")
-    List<PlaceReview> reviews;
+    @OneToMany(mappedBy = "place", fetch = FetchType.LAZY)
+    private List<PlaceReview> reviews = new ArrayList<>();
 
-    @OneToMany(mappedBy = "place")
-    List<PlaceReviewPhoto> reviewPhotos;
+    @OneToMany(mappedBy = "place", fetch = FetchType.LAZY)
+    private List<PlaceReviewPhoto> reviewPhotos = new ArrayList<>();
 
-    @OneToMany(mappedBy = "place")
-    List<PlaceOpenTime> openTimes;
+    @OneToMany(mappedBy = "place", fetch = FetchType.LAZY, orphanRemoval = true, cascade = CascadeType.ALL)
+    private List<PlaceOpenTime> openTimes = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(name = "`group`", nullable = false)
