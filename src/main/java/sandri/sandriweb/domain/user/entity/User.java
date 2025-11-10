@@ -124,10 +124,6 @@ public class User extends BaseEntity implements UserDetails {
     
     @Schema(
             description = "여행 스타일 유형: ① 모험왕(실외+빡빡+로컬), ② 감성요정(실내+여유+감성), ③ 핫플 헌터(실외+빡빡+감성), ④ 현지인(실외+여유+로컬), ⑤ 철저 플래너(실내+빡빡+로컬), ⑥ 힐링 거북이(실내+여유+로컬), ⑦ 산책가(실외+여유+감성), ⑧ 갤러리피플(실내+빡빡+감성)",
-            allowableValues = {
-                "ADVENTURER", "SENSITIVE_FAIRY", "HOTSPOT_HUNTER", "LOCAL",
-                "THOROUGH_PLANNER", "HEALING_TURTLE", "WALKER", "GALLERY_PEOPLE"
-            },
             example = "ADVENTURER"
     )
     public enum TravelStyle {
