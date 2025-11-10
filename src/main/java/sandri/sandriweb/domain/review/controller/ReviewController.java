@@ -197,7 +197,8 @@ public class ReviewController {
     @PostMapping("/api/places/{placeId}/reviews")
     @Operation(summary = "리뷰 작성", 
                description = "리뷰 작성 및 수정 페이지에서 리뷰 업로드 시 호출합니다." +
-                             "별점, 리뷰 내용, 사진(순서, finalUrl)을 전송하면 리뷰를 작성하고 작성한 리뷰 ID를 반환합니다. " +
+                             "별점, 리뷰 내용, 사진(순서, finalUrl)을 전송하면 리뷰를 작성하고 작성한 리뷰 ID를 반환합니다." +
+                             "같은 사용자는 한 장소에 대해 리뷰 하나만 작성가능합니다." +
                              "finalUrl은 프론트에서 getPresignedUrls 호출 시 발급됩니다. 업로드에 성공한 finalUrl을 사용해주세요. " +
                              "작성한 리뷰의 상세 정보가 필요하면 GET /api/me/reviews/{reviewId} API를 호출하세요.")
     @ApiResponses(value = {
@@ -236,7 +237,7 @@ public class ReviewController {
     @GetMapping("/api/me/reviews/{reviewId}")
     @Operation(summary = "리뷰 상세 조회", 
                description = "리뷰 출력/리뷰 수정 시 호출합니다." +
-                             "리뷰 ID, 작성자 정보, 리뷰 내용, 별점, 작성 일시, 사진 정보 리스트를 반환합니다.")
+                             "리뷰 ID, 리뷰 내용, 별점, 작성 일시, 사진 정보 리스트를 반환합니다. (작성자 정보는 null로 반환함.)")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),

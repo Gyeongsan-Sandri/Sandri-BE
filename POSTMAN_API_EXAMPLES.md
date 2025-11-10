@@ -12,14 +12,41 @@
 ### 1.1 로그인
 ```
 POST http://localhost:8080/api/auth/login
-Content-Type: application/x-www-form-urlencoded
+Content-Type: application/json
 
-username=testuser&password=testpass
+{
+  "username": "testuser",
+  "password": "testpass"
+}
 ```
 
+**Request Body:**
+- `username` (required): 사용자 아이디 (최대 30자)
+- `password` (required): 비밀번호 (8-20자)
+
 **응답 예시:**
+```json
+{
+  "success": true,
+  "message": "로그인 성공",
+  "data": {
+    "user": {
+      "id": 1,
+      "name": "홍길동",
+      "nickname": "홍길동",
+      "username": "testuser",
+      "birthDate": "1990-01-01",
+      "gender": "MALE",
+      "location": "경산시",
+      "enabled": true
+    }
+  }
+}
+```
+
+**참고:**
 - 성공 시: 세션 쿠키 자동 설정 (JSESSIONID)
-- 실패 시: 401 Unauthorized
+- 실패 시: 400 Bad Request 또는 401 Unauthorized
 
 ---
 
@@ -214,34 +241,7 @@ GET http://localhost:8080/api/places?category=자연/힐링&count=10
 }
 ```
 
-### 2.5 전체 장소 목록 조회 (간단 정보)
-```
-GET http://localhost:8080/api/places/list
-```
-
-**설명:**
-- 전체 관광지의 ID와 이름만 반환합니다.
-- 전체 DB 목록 확인용
-
-**응답 예시:**
-```json
-{
-  "success": true,
-  "message": "성공",
-  "data": [
-    {
-      "placeId": 1,
-      "name": "경주 불국사"
-    },
-    {
-      "placeId": 2,
-      "name": "경주 석굴암"
-    }
-  ]
-}
-```
-
-### 2.6 장소 좋아요 토글
+### 2.5 장소 좋아요 토글
 ```
 POST http://localhost:8080/api/places/1/like
 ```
@@ -540,13 +540,29 @@ GET http://localhost:8080/api/me/reviews?size=10
   "success": true,
   "message": "성공",
   "data": {
-    "content": [...],
+    "content": [
+      {
+        "reviewId": 1,
+        "user": null,  // 내가 작성한 리뷰이므로 사용자 정보 제외
+        "content": "정말 좋은 장소였습니다!",
+        "rating": 5,
+        "createdAt": "2024-11-05T10:30:00",
+        "photos": [
+          {
+            "photoUrl": "https://s3.../photo1.jpg",
+            "order": 0
+          }
+        ]
+      }
+    ],
     "size": 10,
     "nextCursor": 123,  // 다음 페이지 조회시 사용할 리뷰 ID (null이면 더 이상 없음)
     "hasNext": true
   }
 }
 ```
+
+**참고**: 내가 작성한 리뷰 목록이므로 사용자 정보(`user`)는 `null`로 반환됩니다.
 
 **다음 페이지 조회:**
 ```
@@ -1028,6 +1044,61 @@ Content-Type: application/json
   "success": true,
   "message": "개인 광고가 생성되었습니다.",
   "data": 1
+}
+```
+
+### 6.6 전체 장소 목록 조회 (간단 정보, 관리자용)
+```
+GET http://localhost:8080/api/admin/places/list
+```
+
+**설명:**
+- 전체 관광지의 ID와 이름만 반환합니다.
+- 전체 DB 목록 확인용
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "placeId": 1,
+      "name": "경주 불국사"
+    },
+    {
+      "placeId": 2,
+      "name": "경주 석굴암"
+    }
+  ]
+}
+```
+
+### 6.7 전체 리뷰 목록 조회 (관리자용)
+```
+GET http://localhost:8080/api/admin/reviews/list
+```
+
+**설명:**
+- 관리자가 전체 리뷰 목록을 조회합니다.
+- 리뷰 ID와 리뷰 내용만 반환합니다.
+- 활성화된 리뷰만 반환됩니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "reviewId": 1,
+      "content": "정말 좋은 장소였습니다!"
+    },
+    {
+      "reviewId": 2,
+      "content": "다시 가고 싶은 곳입니다."
+    }
+  ]
 }
 ```
 

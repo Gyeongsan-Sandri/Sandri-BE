@@ -6,6 +6,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import sandri.sandriweb.domain.review.dto.AdminReviewListDto;
 import sandri.sandriweb.domain.review.dto.CursorResponseDto;
 import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.place.entity.Place;
@@ -48,6 +49,12 @@ public class ReviewService {
         // Place 조회
         Place place = placeRepository.findById(placeId)
                 .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다."));
+
+        // 중복 리뷰 체크: 한 사용자는 한 장소에 대해 리뷰 하나만 작성 가능
+        // 호출될 일 X
+        if (placeReviewRepository.existsByUserIdAndPlaceId(user.getId(), placeId)) {
+            throw new RuntimeException("이미 해당 장소에 리뷰를 작성하셨습니다. 리뷰 수정을 이용해주세요.");
+        }
 
         // TODO: 방문 기록 테이블에서 visitDate 가져오기 (나중에 방문 기록 테이블 연동 시)
         // LocalDate visitDate = visitRecordRepository.findByUserIdAndPlaceId(userId, placeId)
@@ -273,8 +280,25 @@ public class ReviewService {
         // 최신순으로 내가 작성한 리뷰 조회 (커서 기반)
         List<PlaceReview> allReviews = placeReviewRepository.findReviewsByUserIdOrderByLatestWithCursor(userId, lastReviewId, pageable);
 
-        // 커서 기반 페이징 처리
-        return buildCursorResponse(allReviews, size, ReviewDto::from, PlaceReview::getId, null);
+        // 커서 기반 페이징 처리 (내가 작성한 리뷰이므로 사용자 정보 제외)
+        return buildCursorResponse(allReviews, size, review -> ReviewDto.from(review, false), PlaceReview::getId, null);
+    }
+
+    /**
+     * 관리자용 전체 리뷰 목록 조회 (reviewId와 content만 반환)
+     * @return 전체 리뷰 목록 (reviewId, content)
+     */
+    @Transactional(readOnly = true)
+    public List<AdminReviewListDto> getAllReviews() {
+        List<PlaceReview> reviews = placeReviewRepository.findAll();
+        
+        return reviews.stream()
+                .filter(PlaceReview::isEnabled) // enabled된 것만
+                .map(review -> AdminReviewListDto.builder()
+                        .reviewId(review.getId())
+                        .content(review.getContent())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     /**

@@ -8,6 +8,7 @@ import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.global.entity.BaseEntity;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity

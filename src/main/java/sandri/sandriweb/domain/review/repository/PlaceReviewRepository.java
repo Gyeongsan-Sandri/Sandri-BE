@@ -113,5 +113,14 @@ public interface PlaceReviewRepository extends JpaRepository<PlaceReview, Long> 
            "LEFT JOIN FETCH r.place " +
            "WHERE r.id = :reviewId")
     java.util.Optional<PlaceReview> findByIdWithUserAndPlace(@Param("reviewId") Long reviewId);
+    
+    /**
+     * 특정 사용자가 특정 장소에 작성한 활성화된 리뷰 존재 여부 확인
+     * @param userId 사용자 ID
+     * @param placeId 장소 ID
+     * @return 리뷰 존재 여부
+     */
+    @Query("SELECT COUNT(r) > 0 FROM PlaceReview r WHERE r.user.id = :userId AND r.place.id = :placeId AND r.enabled = true")
+    boolean existsByUserIdAndPlaceId(@Param("userId") Long userId, @Param("placeId") Long placeId);
 }
 

@@ -51,6 +51,10 @@ public class ReviewDto {
     }
 
     public static ReviewDto from(PlaceReview review) {
+        return from(review, true);
+    }
+
+    public static ReviewDto from(PlaceReview review, boolean includeUser) {
         List<PhotoDto> photos = review.getPhotos() != null 
                 ? review.getPhotos().stream()
                         .sorted((p1, p2) -> Integer.compare(p1.getOrder(), p2.getOrder())) // order 순서로 정렬
@@ -63,7 +67,7 @@ public class ReviewDto {
 
         return ReviewDto.builder()
                 .reviewId(review.getId())
-                .user(UserProfileDto.from(review.getUser()))
+                .user(includeUser ? UserProfileDto.from(review.getUser()) : null)
                 .content(review.getContent())
                 .rating(review.getRating())
                 .createdAt(review.getCreatedAt())
