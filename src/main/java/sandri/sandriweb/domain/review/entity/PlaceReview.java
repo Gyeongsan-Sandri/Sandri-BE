@@ -8,6 +8,7 @@ import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.global.entity.BaseEntity;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -40,8 +41,8 @@ public class PlaceReview extends BaseEntity {
     @JoinColumn(name = "place_id")
     private Place place;
 
-    @OneToMany(mappedBy = "placeReview")
-    private List<PlaceReviewPhoto> photos;
+    @OneToMany(mappedBy = "placeReview", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PlaceReviewPhoto> photos = new ArrayList<>();
 
     /**
      * 리뷰 내용 수정

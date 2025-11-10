@@ -12,14 +12,41 @@
 ### 1.1 로그인
 ```
 POST http://localhost:8080/api/auth/login
-Content-Type: application/x-www-form-urlencoded
+Content-Type: application/json
 
-username=testuser&password=testpass
+{
+  "username": "testuser",
+  "password": "testpass"
+}
 ```
 
+**Request Body:**
+- `username` (required): 사용자 아이디 (최대 30자)
+- `password` (required): 비밀번호 (8-20자)
+
 **응답 예시:**
+```json
+{
+  "success": true,
+  "message": "로그인 성공",
+  "data": {
+    "user": {
+      "id": 1,
+      "name": "홍길동",
+      "nickname": "홍길동",
+      "username": "testuser",
+      "birthDate": "1990-01-01",
+      "gender": "MALE",
+      "location": "경산시",
+      "enabled": true
+    }
+  }
+}
+```
+
+**참고:**
 - 성공 시: 세션 쿠키 자동 설정 (JSESSIONID)
-- 실패 시: 401 Unauthorized
+- 실패 시: 400 Bad Request 또는 401 Unauthorized
 
 ---
 
@@ -62,8 +89,14 @@ GET http://localhost:8080/api/places/1
     "summary": "신라 불교 문화의 정수를 보여주는 사찰",
     "information": "불국사는 신라 경덕왕 10년(751)에 김대성이 창건을 시작하여...",
     "officialPhotos": [
-      "https://s3.../photo1.jpg",
-      "https://s3.../photo2.jpg"
+      {
+        "order": 0,
+        "photoUrl": "https://s3.../photo1.jpg"
+      },
+      {
+        "order": 1,
+        "photoUrl": "https://s3.../photo2.jpg"
+      }
     ]
   }
 }
@@ -208,34 +241,7 @@ GET http://localhost:8080/api/places?category=자연/힐링&count=10
 }
 ```
 
-### 2.5 전체 장소 목록 조회 (간단 정보)
-```
-GET http://localhost:8080/api/places/simple
-```
-
-**설명:**
-- 전체 관광지의 ID와 이름만 반환합니다.
-- 전체 DB 목록 확인용
-
-**응답 예시:**
-```json
-{
-  "success": true,
-  "message": "성공",
-  "data": [
-    {
-      "placeId": 1,
-      "name": "경주 불국사"
-    },
-    {
-      "placeId": 2,
-      "name": "경주 석굴암"
-    }
-  ]
-}
-```
-
-### 2.6 장소 좋아요 토글
+### 2.5 장소 좋아요 토글
 ```
 POST http://localhost:8080/api/places/1/like
 ```
@@ -270,10 +276,33 @@ GET http://localhost:8080/api/places/1/reviews?size=10&sort=latest
   "success": true,
   "message": "성공",
   "data": {
-    "content": [...],
+    "content": [
+      {
+        "reviewId": 1,
+        "user": {
+          "userId": 1,
+          "username": "testuser",
+          "profileImageUrl": "https://s3.../profile.jpg"
+        },
+        "content": "정말 좋은 장소였습니다!",
+        "rating": 5,
+        "createdAt": "2024-11-05T10:30:00",
+        "photos": [
+          {
+            "photoUrl": "https://s3.../photo1.jpg",
+            "order": 0
+          },
+          {
+            "photoUrl": "https://s3.../photo2.jpg",
+            "order": 1
+          }
+        ]
+      }
+    ],
     "size": 10,
     "nextCursor": 123,  // 다음 페이지 조회시 사용할 리뷰 ID (null이면 더 이상 없음)
-    "hasNext": true
+    "hasNext": true,
+    "totalCount": 50  // 전체 리뷰 개수
   }
 }
 ```
@@ -298,10 +327,20 @@ GET http://localhost:8080/api/places/1/reviews/photos?size=20
   "success": true,
   "message": "성공",
   "data": {
-    "content": ["https://s3.../photo1.jpg", "https://s3.../photo2.jpg", ...],
+    "content": [
+      {
+        "photoUrl": "https://s3.../photo1.jpg",
+        "order": 0
+      },
+      {
+        "photoUrl": "https://s3.../photo2.jpg",
+        "order": 1
+      }
+    ],
     "size": 20,
     "nextCursor": 123,  // 다음 페이지 조회시 사용할 사진 ID (null이면 더 이상 없음)
-    "hasNext": true
+    "hasNext": true,
+    "totalCount": 100  // 전체 리뷰 사진 개수
   }
 }
 ```
@@ -313,18 +352,20 @@ GET http://localhost:8080/api/places/1/reviews/photos?lastPhotoId=123&size=20
 
 ### 3.3 Presigned URL 발급 (리뷰 사진/영상 업로드용)
 ```
-POST http://localhost:8080/api/me/reviews/files/presigned
+POST http://localhost:8080/api/me/files
 Content-Type: application/json
 
 {
   "files": [
     {
       "fileName": "photo1.jpg",
-      "contentType": "image/jpeg"
+      "contentType": "image/jpeg",
+      "order": 0
     },
     {
       "fileName": "photo2.png",
-      "contentType": "image/png"
+      "contentType": "image/png",
+      "order": 1
     }
   ]
 }
@@ -332,9 +373,10 @@ Content-Type: application/json
 **인증 필요**: 로그인 필수
 
 **Request Body:**
-- `files` (required): 파일 정보 리스트
+- `files` (required): 파일 정보 리스트 (최소 1개, 최대 10개)
   - `fileName` (required): 파일명
   - `contentType` (required): 파일 타입 (예: `image/jpeg`, `image/png`, `video/mp4`)
+  - `order` (required): 사진 순서 (0부터 시작)
 
 **응답 예시:**
 ```json
@@ -346,12 +388,14 @@ Content-Type: application/json
       {
         "fileName": "reviews/1234567890_abc123_photo1.jpg",
         "presignedUrl": "https://your-bucket.s3.ap-northeast-2.amazonaws.com/reviews/...?X-Amz-Algorithm=...",
-        "finalUrl": "https://your-bucket.s3.ap-northeast-2.amazonaws.com/reviews/1234567890_abc123_photo1.jpg"
+        "finalUrl": "https://your-bucket.s3.ap-northeast-2.amazonaws.com/reviews/1234567890_abc123_photo1.jpg",
+        "order": 0
       },
       {
         "fileName": "reviews/1234567890_def456_photo2.png",
         "presignedUrl": "https://your-bucket.s3.ap-northeast-2.amazonaws.com/reviews/...?X-Amz-Algorithm=...",
-        "finalUrl": "https://your-bucket.s3.ap-northeast-2.amazonaws.com/reviews/1234567890_def456_photo2.png"
+        "finalUrl": "https://your-bucket.s3.ap-northeast-2.amazonaws.com/reviews/1234567890_def456_photo2.png",
+        "order": 1
       }
     ]
   }
@@ -361,22 +405,78 @@ Content-Type: application/json
 **프론트엔드 업로드 워크플로우:**
 
 1. **Presigned URL 발급** (위 API 호출)
-2. **각 Presigned URL로 파일 업로드** (PUT 요청):
+   - 백엔드에 파일명과 contentType을 전송
+   - 백엔드가 각 파일에 대한 Presigned URL과 finalUrl을 반환
+
+2. **각 Presigned URL로 S3에 직접 파일 업로드** (PUT 요청, **백엔드를 거치지 않음**):
    ```javascript
-   // 각 파일에 대해
-   await fetch(presignedUrl, {
-     method: 'PUT',
+   // 각 파일에 대해 Presigned URL로 직접 S3에 업로드
+   const files = [file1, file2]; // File 객체들
+   const fileInfos = files.map((file, index) => ({
+     fileName: file.name,
+     contentType: file.type,  // 예: "image/jpeg", "image/png"
+     order: index  // 0부터 시작하는 순서
+   }));
+   
+   // 1단계: Presigned URL 발급
+   const response = await fetch('/api/me/files', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({ files: fileInfos })
+   });
+   const { data } = await response.json();
+   
+   // 2단계: 각 파일을 S3에 직접 업로드
+   for (let i = 0; i < files.length; i++) {
+     const file = files[i];
+     const presignedUrlData = data.presignedUrls[i];
+     const contentType = fileInfos[i].contentType;  // 발급 요청 시 보낸 contentType 사용
+     
+     // Presigned URL로 PUT 요청 (백엔드 서버를 거치지 않고 S3에 직접 업로드)
+     const uploadResponse = await fetch(presignedUrlData.presignedUrl, {
+       method: 'PUT',
+       headers: {
+         'Content-Type': contentType  // 발급 요청 시 보낸 contentType과 동일해야 함
+       },
+       body: file  // File 객체 (Blob)
+     });
+     
+     if (!uploadResponse.ok) {
+       throw new Error(`파일 업로드 실패: ${file.name}`);
+     }
+     
+     // ⚠️ 중요: S3는 업로드 성공 시 HTTP 200만 반환합니다 (body 없음)
+     // finalUrl은 1단계에서 이미 받았으므로, 여기서는 업로드 성공 여부만 확인하면 됩니다
+   }
+   ```
+
+3. **리뷰 작성 시 finalUrl과 order 사용**:
+   ```javascript
+   // 업로드 완료 후 finalUrl과 order를 추출하여 리뷰 작성 API에 전송
+   const photos = response.data.presignedUrls.map(item => ({
+     photoUrl: item.finalUrl,  // S3에 업로드된 파일의 최종 URL
+     order: item.order  // 사진 순서
+   }));
+   
+   // 리뷰 작성 API 호출
+   await fetch('/api/places/1/reviews', {
+     method: 'POST',
      headers: {
-       'Content-Type': fileInfo.contentType  // 발급 요청 시 보낸 contentType
+       'Content-Type': 'application/json'
      },
-     body: file  // File 객체
+     body: JSON.stringify({
+       rating: 5,
+       content: "정말 좋은 장소였습니다!",
+       photos: photos  // photoUrl과 order를 포함한 사진 정보 리스트
+     })
    });
    ```
-3. **리뷰 작성 시 finalUrl 사용**:
-   ```javascript
-   const finalUrls = presignedUrls.map(item => item.finalUrl);
-   // 리뷰 작성 API에 finalUrls를 photoUrls로 전송
-   ```
+
+**⚠️ 중요 사항:**
+- Presigned URL은 **임시 URL**이며, 보통 5분 정도의 유효 기간이 있습니다.
+- 파일 업로드는 **백엔드 서버를 거치지 않고** 프론트엔드에서 **S3에 직접** 업로드됩니다.
+- 업로드 시 `Content-Type` 헤더는 Presigned URL 발급 시 전송한 `contentType`과 동일해야 합니다.
+
 
 ### 3.4 리뷰 작성
 ```
@@ -386,9 +486,15 @@ Content-Type: application/json
 {
   "rating": 5,
   "content": "정말 좋은 장소였습니다!",
-  "photoUrls": [
-    "https://s3.../photo1.jpg",
-    "https://s3.../photo2.jpg"
+  "photos": [
+    {
+      "photoUrl": "https://s3.../photo1.jpg",
+      "order": 0
+    },
+    {
+      "photoUrl": "https://s3.../photo2.jpg",
+      "order": 1
+    }
   ]
 }
 ```
@@ -397,7 +503,20 @@ Content-Type: application/json
 **Request Body:**
 - `rating` (required): 별점 (1-5)
 - `content` (required): 리뷰 내용 (최대 1000자)
-- `photoUrls` (optional): 사진 URL 리스트
+- `photos` (optional): 사진 정보 리스트
+  - `photoUrl` (required): AWS S3에 업로드된 사진/영상 URL
+  - `order` (required): 사진 순서 (0부터 시작)
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": 1  // 작성된 리뷰 ID
+}
+```
+
+**참고**: 작성한 리뷰의 상세 정보가 필요하면 `GET /api/me/reviews/{reviewId}` API를 호출하세요.
 
 ### 3.5 내가 작성한 리뷰 상세 조회(! 활용처는 X, 리뷰 수정용)
 ```
@@ -421,7 +540,21 @@ GET http://localhost:8080/api/me/reviews?size=10
   "success": true,
   "message": "성공",
   "data": {
-    "content": [...],
+    "content": [
+      {
+        "reviewId": 1,
+        "user": null,  // 내가 작성한 리뷰이므로 사용자 정보 제외
+        "content": "정말 좋은 장소였습니다!",
+        "rating": 5,
+        "createdAt": "2024-11-05T10:30:00",
+        "photos": [
+          {
+            "photoUrl": "https://s3.../photo1.jpg",
+            "order": 0
+          }
+        ]
+      }
+    ],
     "size": 10,
     "nextCursor": 123,  // 다음 페이지 조회시 사용할 리뷰 ID (null이면 더 이상 없음)
     "hasNext": true
@@ -429,12 +562,14 @@ GET http://localhost:8080/api/me/reviews?size=10
 }
 ```
 
+**참고**: 내가 작성한 리뷰 목록이므로 사용자 정보(`user`)는 `null`로 반환됩니다.
+
 **다음 페이지 조회:**
 ```
 GET http://localhost:8080/api/me/reviews?lastReviewId=123&size=10
 ```
 
-### 3.7 리뷰 수정(!디자인 요구)
+### 3.7 리뷰 수정
 ```
 PUT http://localhost:8080/api/me/reviews/1
 Content-Type: application/json
@@ -442,20 +577,53 @@ Content-Type: application/json
 {
   "rating": 4,
   "content": "수정된 리뷰 내용입니다.",
-  "photoUrls": [
-    "https://s3.../new-photo.jpg"
+  "photos": [
+    {
+      "photoUrl": "https://s3.../new-photo.jpg",
+      "order": 0
+    }
   ]
 }
 ```
 **인증 필요**: 로그인 필수
 
-**참고**: 기존 사진은 모두 삭제되고 새로운 사진으로 교체됩니다.
+**Request Body:**
+- `rating` (required): 별점 (1-5)
+- `content` (required): 리뷰 내용 (최대 1000자)
+- `photos` (optional): 사진 정보 리스트
+  - `photoUrl` (required): AWS S3에 업로드된 사진/영상 URL
+  - `order` (required): 사진 순서 (0부터 시작)
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": 1  // 수정된 리뷰 ID
+}
+```
+
+**참고**: 
+- 기존 사진 엔티티는 모두 삭제되고 새로운 사진으로 교체됩니다.
+- S3에 저장된 실제 파일은 삭제되지 않습니다.
+- 수정된 리뷰의 상세 정보가 필요하면 `GET /api/me/reviews/{reviewId}` API를 호출하세요.
 
 ### 3.8 리뷰 삭제
 ```
 DELETE http://localhost:8080/api/me/reviews/1
 ```
 **인증 필요**: 로그인 필수
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": null
+}
+```
+
+**참고**: 연결된 사진 엔티티는 삭제되지만, S3에 저장된 실제 파일은 삭제되지 않습니다.
 
 ---
 
@@ -879,6 +1047,61 @@ Content-Type: application/json
 }
 ```
 
+### 6.6 전체 장소 목록 조회 (간단 정보, 관리자용)
+```
+GET http://localhost:8080/api/admin/places/list
+```
+
+**설명:**
+- 전체 관광지의 ID와 이름만 반환합니다.
+- 전체 DB 목록 확인용
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "placeId": 1,
+      "name": "경주 불국사"
+    },
+    {
+      "placeId": 2,
+      "name": "경주 석굴암"
+    }
+  ]
+}
+```
+
+### 6.7 전체 리뷰 목록 조회 (관리자용)
+```
+GET http://localhost:8080/api/admin/reviews/list
+```
+
+**설명:**
+- 관리자가 전체 리뷰 목록을 조회합니다.
+- 리뷰 ID와 리뷰 내용만 반환합니다.
+- 활성화된 리뷰만 반환됩니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "reviewId": 1,
+      "content": "정말 좋은 장소였습니다!"
+    },
+    {
+      "reviewId": 2,
+      "content": "다시 가고 싶은 곳입니다."
+    }
+  ]
+}
+```
+
 ---
 
 ## Postman Collection 설정 팁
@@ -919,18 +1142,19 @@ if (pm.response.code === 200) {
 1. `GET /api/places?category=자연/힐링&count=5` - 카테고리별 장소 조회
 2. `GET /api/places/1/nearby?count=10` - 근처 가볼만한 곳 조회 (거리 순)
 3. `GET /api/places/1/nearby/group?group=맛집&count=6` - 근처 가볼만한 곳 조회 (대분류별, 좋아요 순)
-4. `GET /api/places/simple` - 전체 장소 목록 조회 (간단 정보)
+4. `GET /api/places/list` - 전체 장소 목록 조회 (간단 정보)
 5. `POST /api/places/1/like` - 좋아요 추가 (로그인 필요)
 
 ### 시나리오 2: 리뷰 작성 및 조회
 1. `POST /api/auth/login` - 로그인
-2. `POST /api/me/reviews/files/presigned` - Presigned URL 발급 (파일 정보 전송)
+2. `POST /api/me/files` - Presigned URL 발급 (파일명, contentType, order 전송)
 3. 각 Presigned URL로 PUT 요청 - S3에 직접 파일 업로드
-4. `POST /api/places/1/reviews` - 리뷰 작성 (finalUrl 사용)
+4. `POST /api/places/1/reviews` - 리뷰 작성 (finalUrl과 order 사용)
 5. `GET /api/places/1/reviews` - 리뷰 목록 조회 (커서 기반 페이징)
-6. `GET /api/me/reviews/1` - 내 리뷰 상세 조회
-7. `PUT /api/me/reviews/1` - 리뷰 수정
-8. `DELETE /api/me/reviews/1` - 리뷰 삭제
+6. `GET /api/places/1/reviews/photos` - 리뷰 사진 목록 조회 (커서 기반 페이징)
+7. `GET /api/me/reviews/1` - 내 리뷰 상세 조회
+8. `PUT /api/me/reviews/1` - 리뷰 수정 (finalUrl과 order 사용)
+9. `DELETE /api/me/reviews/1` - 리뷰 삭제
 
 ### 시나리오 3: 매거진 조회 및 좋아요
 1. `GET /api/magazines?size=5` - 매거진 목록 조회 (첫 페이지)

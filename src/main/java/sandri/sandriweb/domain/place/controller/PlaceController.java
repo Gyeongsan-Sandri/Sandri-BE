@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.place.dto.SimplePlaceDto;
 import sandri.sandriweb.domain.place.dto.NearbyPlaceDto;
 import sandri.sandriweb.domain.place.dto.PlaceDetailResponseDto;
-import sandri.sandriweb.domain.place.dto.PlaceListDto;
 import sandri.sandriweb.domain.place.service.PlaceService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
@@ -177,28 +176,6 @@ public class PlaceController {
             log.error("카테고리별 장소 조회 중 오류 발생: ", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponseDto.error("카테고리별 장소를 조회하는 중 오류가 발생했습니다."));
-        }
-    }
-
-    @GetMapping("/simple")
-    @Operation(summary = "전체 장소 목록 조회 (간단 정보)",
-               description = "전체 관광지의 ID와 이름만 반환합니다." +
-                             "전체 DB 목록 확인용")
-    @ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
-    })
-    public ResponseEntity<ApiResponseDto<List<PlaceListDto>>> getPlaceLists() {
-
-        log.info("전체 장소 목록 조회");
-
-        try {
-            List<PlaceListDto> response = placeService.getAllPlaces();
-            return ResponseEntity.ok(ApiResponseDto.success(response));
-        } catch (Exception e) {
-            log.error("전체 장소 목록 조회 중 오류 발생: ", e);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponseDto.error("전체 장소 목록을 조회하는 중 오류가 발생했습니다."));
         }
     }
 

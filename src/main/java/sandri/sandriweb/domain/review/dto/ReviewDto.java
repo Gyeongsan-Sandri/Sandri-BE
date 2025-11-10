@@ -34,23 +34,44 @@ public class ReviewDto {
     @Schema(description = "작성 일시", example = "2024-11-05T10:30:00")
     private LocalDateTime createdAt;
     
-    @Schema(description = "사진 URL 리스트", example = "[\"https://s3.../photo1.jpg\"]")
-    private List<String> photoUrls;
+    @Schema(description = "사진 정보 리스트")
+    private List<PhotoDto> photos;
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(description = "리뷰 사진 정보")
+    public static class PhotoDto {
+        @Schema(description = "사진 URL", example = "https://s3.../photo1.jpg")
+        private String photoUrl;
+        
+        @Schema(description = "사진 순서 (0부터 시작)", example = "0")
+        private Integer order;
+    }
 
     public static ReviewDto from(PlaceReview review) {
-        List<String> photoUrls = review.getPhotos() != null 
+        return from(review, true);
+    }
+
+    public static ReviewDto from(PlaceReview review, boolean includeUser) {
+        List<PhotoDto> photos = review.getPhotos() != null 
                 ? review.getPhotos().stream()
-                        .map(photo -> photo.getPhotoUrl())
+                        .sorted((p1, p2) -> Integer.compare(p1.getOrder(), p2.getOrder())) // order 순서로 정렬
+                        .map(photo -> PhotoDto.builder()
+                                .photoUrl(photo.getPhotoUrl())
+                                .order(photo.getOrder())
+                                .build())
                         .collect(Collectors.toList())
                 : List.of();
 
         return ReviewDto.builder()
                 .reviewId(review.getId())
-                .user(UserProfileDto.from(review.getUser()))
+                .user(includeUser ? UserProfileDto.from(review.getUser()) : null)
                 .content(review.getContent())
                 .rating(review.getRating())
                 .createdAt(review.getCreatedAt())
-                .photoUrls(photoUrls)
+                .photos(photos)
                 .build();
     }
 }
