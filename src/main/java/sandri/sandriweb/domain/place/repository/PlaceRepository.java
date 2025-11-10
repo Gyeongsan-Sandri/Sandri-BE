@@ -129,4 +129,5 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     Page<Place> searchByKeywordAndCategory(@Param("keyword") String keyword,
                                            @Param("category") String category,
                                            Pageable pageable);
+
 }

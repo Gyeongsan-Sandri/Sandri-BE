@@ -497,10 +497,28 @@ public class PlaceService {
             throw new RuntimeException("이미 존재하는 장소 이름입니다: " + request.getName());
         }
 
+        // 좌표 범위 검증
+        if (request.getLatitude() < -90 || request.getLatitude() > 90) {
+            throw new RuntimeException("위도는 -90 ~ 90 사이여야 합니다: " + request.getLatitude());
+        }
+        if (request.getLongitude() < -180 || request.getLongitude() > 180) {
+            throw new RuntimeException("경도는 -180 ~ 180 사이여야 합니다: " + request.getLongitude());
+        }
+
         // 위도/경도를 Point로 변환
         Point location = geometryFactory.createPoint(
                 new org.locationtech.jts.geom.Coordinate(request.getLongitude(), request.getLatitude())
         );
+
+        // 같은 location을 가진 enabled된 Place가 있으면 disable 처리 (거리 0m 이내)
+        List<Place> nearbyPlaces = placeRepository.findNearbyPlaces(location, 0.0, -1L, 1);
+        if (!nearbyPlaces.isEmpty()) {
+            Place existingPlace = nearbyPlaces.get(0);
+            existingPlace.disable();
+            placeRepository.save(existingPlace);
+            log.info("같은 location을 가진 기존 장소 비활성화: placeId={}, name={}", 
+                    existingPlace.getId(), existingPlace.getName());
+        }
 
         // Place 생성
         Place place = Place.builder()
