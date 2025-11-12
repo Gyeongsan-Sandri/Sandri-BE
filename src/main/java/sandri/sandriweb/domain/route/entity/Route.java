@@ -27,9 +27,6 @@ public class Route {
     @Column(nullable = false, length = 100)
     private String title;
     
-    @Column(length = 500)
-    private String description;
-    
     @Column(nullable = false)
     private LocalDate startDate;
     
@@ -80,10 +77,6 @@ public class Route {
     
     public void updateTitle(String title) {
         this.title = title;
-    }
-    
-    public void updateDescription(String description) {
-        this.description = description;
     }
     
     public void updateDates(LocalDate startDate, LocalDate endDate) {

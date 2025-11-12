@@ -134,7 +134,6 @@ public class SearchService {
                     return RouteSearchResponseDto.RouteSearchItemDto.builder()
                             .routeId(route.getId())
                             .title(route.getTitle())
-                            .description(route.getDescription())
                             .startDate(route.getStartDate())
                             .endDate(route.getEndDate())
                             .creatorNickname(route.getCreator().getNickname())
@@ -327,13 +326,13 @@ public class SearchService {
     private List<String> generateRouteHashtags(Route route) {
         List<String> hashtags = new ArrayList<>();
         
-        // 루트 설명에서 키워드 추출 또는 기본 해시태그
-        if (route.getDescription() != null) {
-            String desc = route.getDescription().toLowerCase();
-            if (desc.contains("빵") || desc.contains("베이커리")) {
+        // 루트 제목에서 키워드 추출 또는 기본 해시태그
+        if (route.getTitle() != null) {
+            String title = route.getTitle().toLowerCase();
+            if (title.contains("빵") || title.contains("베이커리")) {
                 hashtags.add("#식도락");
                 hashtags.add("#베이커리");
-            } else if (desc.contains("카페") || desc.contains("디저트")) {
+            } else if (title.contains("카페") || title.contains("디저트")) {
                 hashtags.add("#식도락");
                 hashtags.add("#감성카페");
             } else {
