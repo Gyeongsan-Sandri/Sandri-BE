@@ -25,7 +25,7 @@ public interface RouteRepository extends JpaRepository<Route, Long> {
     boolean existsByIdAndCreator(Long id, User creator);
 
     /**
-     * 키워드로 루트 검색 (제목, 설명에서 검색, 공개된 루트만)
+     * 키워드로 루트 검색 (제목에서 검색, 공개된 루트만)
      * locations와 creator를 fetch join하여 N+1 문제 방지
      * @param keyword 검색 키워드
      * @param pageable 페이징 정보
@@ -35,8 +35,7 @@ public interface RouteRepository extends JpaRepository<Route, Long> {
            "LEFT JOIN FETCH r.locations " +
            "LEFT JOIN FETCH r.creator " +
            "WHERE r.isPublic = true " +
-           "AND (LOWER(r.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "     OR LOWER(r.description) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           "AND LOWER(r.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "ORDER BY r.createdAt DESC")
     Page<Route> searchByKeyword(@Param("keyword") String keyword, Pageable pageable);
 }

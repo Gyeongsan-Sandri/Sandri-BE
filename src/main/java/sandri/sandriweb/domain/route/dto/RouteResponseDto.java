@@ -21,7 +21,6 @@ public class RouteResponseDto {
     
     private Long id;
     private String title;
-    private String description;
     private LocalDate startDate;
     private LocalDate endDate;
     private Long creatorId;
@@ -38,7 +37,6 @@ public class RouteResponseDto {
         return RouteResponseDto.builder()
                 .id(route.getId())
                 .title(route.getTitle())
-                .description(route.getDescription())
                 .startDate(route.getStartDate())
                 .endDate(route.getEndDate())
                 .creatorId(route.getCreator().getId())

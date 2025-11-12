@@ -38,7 +38,6 @@ public class RouteService {
         try {
             Route route = Route.builder()
                     .title(request.getTitle())
-                    .description(request.getDescription())
                     .startDate(request.getStartDate())
                     .endDate(request.getEndDate())
                     .creator(creator)
@@ -115,9 +114,6 @@ public class RouteService {
             if (request.getTitle() != null) {
                 route.updateTitle(request.getTitle());
             }
-            if (request.getDescription() != null) {
-                route.updateDescription(request.getDescription());
-            }
             if (request.getStartDate() != null && request.getEndDate() != null) {
                 route.updateDates(request.getStartDate(), request.getEndDate());
             }
@@ -175,11 +171,11 @@ public class RouteService {
         }
     }
     
-    public ApiResponseDto<List<RouteResponseDto>> getUserRoutes(User user) {
+    public ApiResponseDto<List<RouteListDto>> getUserRoutes(User user) {
         try {
             List<Route> routes = routeRepository.findByParticipantOrCreator(user);
-            List<RouteResponseDto> response = routes.stream()
-                    .map(RouteResponseDto::from)
+            List<RouteListDto> response = routes.stream()
+                    .map(RouteListDto::from)
                     .collect(Collectors.toList());
             
             return ApiResponseDto.success(response);

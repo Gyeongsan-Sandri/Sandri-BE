@@ -22,9 +22,6 @@ public class CreateRouteRequestDto {
     @Schema(description = "루트 제목", example = "경주 2박 3일 여행", required = true)
     private String title;
     
-    @Schema(description = "루트 설명", example = "경주의 주요 관광지를 둘러보는 여행")
-    private String description;
-    
     @NotNull(message = "시작 날짜는 필수입니다")
     @Schema(description = "시작 날짜", example = "2024-11-05", required = true)
     private LocalDate startDate;
