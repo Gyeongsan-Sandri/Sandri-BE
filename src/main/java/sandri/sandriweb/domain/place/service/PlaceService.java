@@ -5,8 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sandri.sandriweb.domain.admin.dto.CreatePlacePhotoRequestDto;
@@ -625,6 +623,7 @@ public class PlaceService {
                         photosToSave.add(newPhoto);
                     }
                 }
+
             }
             
             // 변경사항 저장
@@ -639,6 +638,39 @@ public class PlaceService {
         log.info("장소 수정 완료: placeId={}, name={}", savedPlace.getId(), savedPlace.getName());
 
         return savedPlace.getId();
+    }
+
+    /**
+     * 사용자가 관심 등록한 관광지 목록 조회
+     */
+    public List<SimplePlaceDto> getLikedPlaces(Long userId) {
+        List<Place> likedPlaces = userPlaceRepository.findLikedPlacesByUserId(userId);
+
+        if (likedPlaces.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> placeIds = likedPlaces.stream()
+                .map(Place::getId)
+                .collect(Collectors.toList());
+
+        Map<Long, String> thumbnailMap = placePhotoRepository.findFirstPhotoUrlByPlaceIdIn(placeIds).stream()
+                .collect(Collectors.toMap(
+                        result -> ((Number) result[0]).longValue(),
+                        result -> (String) result[1]
+                ));
+
+        return likedPlaces.stream()
+                .map(place -> SimplePlaceDto.builder()
+                        .placeId(place.getId())
+                        .name(place.getName())
+                        .address(place.getAddress())
+                        .thumbnailUrl(thumbnailMap.get(place.getId()))
+                        .isLiked(true)
+                        .groupName(place.getGroup() != null ? place.getGroup().name() : null)
+                        .categoryName(place.getCategory() != null ? place.getCategory().getDisplayName() : null)
+                        .build())
+                .collect(Collectors.toList());
     }
 
     /**

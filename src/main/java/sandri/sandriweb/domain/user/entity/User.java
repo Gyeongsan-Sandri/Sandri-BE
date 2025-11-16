@@ -65,6 +65,10 @@ public class User extends BaseEntity implements UserDetails {
     
     @Column
     private Double longitude;
+
+    @Column(nullable = false)
+    @lombok.Builder.Default
+    private Long point = 0L;
     
     // UserDetails 구현
     @Override
@@ -116,6 +120,37 @@ public class User extends BaseEntity implements UserDetails {
     
     public void updateNickname(String nickname) {
         this.nickname = nickname;
+    }
+
+    public void addPoint(long amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("포인트 증감은 음수일 수 없습니다");
+        }
+        if (this.point == null) {
+            this.point = 0L;
+        }
+        this.point += amount;
+    }
+
+    public void subtractPoint(long amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("포인트 증감은 음수일 수 없습니다");
+        }
+        if (this.point == null) {
+            this.point = 0L;
+        }
+        if (this.point < amount) {
+            throw new IllegalArgumentException("포인트가 부족합니다");
+        }
+        this.point -= amount;
+    }
+
+    @PrePersist
+    @PostLoad
+    private void ensurePointInitialized() {
+        if (this.point == null) {
+            this.point = 0L;
+        }
     }
     
     @Schema(description = "성별", allowableValues = {"MALE", "FEMALE", "OTHER"})
