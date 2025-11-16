@@ -65,7 +65,7 @@ public class UserController {
                             schema = @Schema(implementation = ApiResponseDto.class),
                             examples = @ExampleObject(
                                     name = "성공 응답",
-                                    value = "{\n  \"success\": true,\n  \"message\": \"성공\",\n  \"data\": {\n    \"id\": 1,\n    \"name\": \"홍길동\",\n    \"nickname\": \"홍길동\",\n    \"username\": \"hong123\",\n    \"birthDate\": \"1990-01-01\",\n    \"gender\": \"MALE\",\n    \"location\": \"경산시\",\n    \"enabled\": true\n  }\n}"
+                                    value = "{\n  \"success\": true,\n  \"message\": \"성공\",\n  \"data\": {\n    \"id\": 1,\n    \"name\": \"홍길동\",\n    \"nickname\": \"홍길동\",\n    \"username\": \"hong123\",\n    \"birthDate\": \"1990-01-01\",\n    \"gender\": \"MALE\",\n    \"location\": \"경산시\",\n    \"point\": 1200,\n    \"enabled\": true\n  }\n}"
                             )
                     )
             ),
