@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.route.dto.*;
 import sandri.sandriweb.domain.route.service.RouteService;
@@ -144,14 +145,14 @@ public class RouteController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요")
     })
-    public ResponseEntity<ApiResponseDto<List<RouteResponseDto>>> getMyRoutes(Authentication authentication) {
+    public ResponseEntity<ApiResponseDto<List<RouteListDto>>> getMyRoutes(Authentication authentication) {
         
         String username = authentication.getName();
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
         
         log.info("내 루트 목록 조회: 사용자={}", username);
-        ApiResponseDto<List<RouteResponseDto>> response = routeService.getUserRoutes(user);
+        ApiResponseDto<List<RouteListDto>> response = routeService.getUserRoutes(user);
         
         return ResponseEntity.ok(response);
     }
@@ -274,6 +275,39 @@ public class RouteController {
             return ResponseEntity.ok(response);
         } else {
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PostMapping("/{routeId}/like")
+    @Operation(summary = "루트 좋아요 토글", description = "루트에 대한 관심(좋아요)을 추가하거나 해제합니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "토글 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "루트 없음")
+    })
+    public ResponseEntity<ApiResponseDto<Boolean>> toggleRouteLike(
+            @PathVariable Long routeId,
+            @AuthenticationPrincipal User user) {
+
+        if (user == null) {
+            return ResponseEntity.status(401)
+                    .body(ApiResponseDto.error("로그인이 필요합니다."));
+        }
+
+        try {
+            boolean isLiked = routeService.toggleLike(routeId, user.getId());
+            String message = isLiked ? "관심에 추가되었습니다." : "관심이 취소되었습니다.";
+            return ResponseEntity.ok(ApiResponseDto.success(message, isLiked));
+        } catch (RuntimeException e) {
+            if (e.getMessage().contains("찾을 수 없습니다")) {
+                return ResponseEntity.status(404)
+                        .body(ApiResponseDto.error(e.getMessage()));
+            }
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("관심 처리 중 오류가 발생했습니다."));
         }
     }
 }

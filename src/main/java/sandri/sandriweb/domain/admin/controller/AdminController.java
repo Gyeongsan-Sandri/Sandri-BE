@@ -2,13 +2,17 @@ package sandri.sandriweb.domain.admin.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import sandri.sandriweb.domain.advertise.dto.CreateOfficialAdRequestDto;
 import sandri.sandriweb.domain.advertise.dto.CreatePrivateAdRequestDto;
 import sandri.sandriweb.domain.advertise.service.AdvertiseService;
@@ -19,6 +23,7 @@ import sandri.sandriweb.domain.magazine.dto.TagDto;
 import sandri.sandriweb.domain.magazine.dto.UpdateMagazineRequestDto;
 import sandri.sandriweb.domain.magazine.service.MagazineService;
 import sandri.sandriweb.domain.place.dto.CreatePlaceRequestDto;
+import sandri.sandriweb.domain.place.dto.CreatePlaceFormRequestDto;
 import sandri.sandriweb.domain.place.dto.PlaceListDto;
 import sandri.sandriweb.domain.place.dto.UpdatePlaceRequestDto;
 import sandri.sandriweb.domain.place.service.PlaceService;
@@ -42,27 +47,29 @@ public class AdminController {
 
     // ========== 장소 관련 ==========
 
-    @PostMapping("/places")
+    @PostMapping(value = "/places", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(hidden = true)
+    public ResponseEntity<ApiResponseDto<Long>> createPlaceJson(
+            @Valid @RequestBody CreatePlaceRequestDto request) {
+        return handleCreatePlace(request, null);
+    }
+
+    @PostMapping(value = "/places", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "장소 생성",
-               description = "관리자가 새로운 장소를 생성합니다." +
-                             "사진은 다른 API를 통해 추가합니다.")
+               description = "Swagger 폼으로 장소를 생성합니다. 주소만 입력하면 Google Geocoding API로 위도/경도가 자동 계산되며, " +
+                             "`photos` 필드에 이미지 파일을 첨부하면 자동으로 S3에 업로드되어 장소 대표 사진으로 등록됩니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "생성 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    public ResponseEntity<ApiResponseDto<Long>> createPlace(
-            @Valid @RequestBody CreatePlaceRequestDto request) {
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                    schema = @Schema(implementation = CreatePlaceFormRequestDto.class))
+    )
+    public ResponseEntity<ApiResponseDto<Long>> createPlaceForm(
+            @Valid @ModelAttribute CreatePlaceFormRequestDto request) {
 
-        log.info("장소 생성 요청");
-
-        try {
-            Long placeId = placeService.createPlace(request);
-            return ResponseEntity.ok(ApiResponseDto.success("장소가 생성되었습니다.", placeId));
-        } catch (Exception e) {
-            log.error("장소 생성 중 오류 발생: ", e);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponseDto.error("장소 생성 중 오류가 발생했습니다: " + e.getMessage()));
-        }
+        return handleCreatePlace(request, request.getPhotos());
     }
 
     @PutMapping("/places/{placeId}")
@@ -130,28 +137,29 @@ public class AdminController {
 
     // ========== 매거진 관련 ==========
 
-    @PostMapping("/magazines")
+    @PostMapping(value = "/magazines", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(hidden = true)
+    public ResponseEntity<ApiResponseDto<Long>> createMagazineJson(
+            @Valid @RequestBody CreateMagazineRequestDto request) {
+        return handleCreateMagazine(request);
+    }
+
+    @PostMapping(value = "/magazines", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "매거진 생성",
-               description = "새로운 매거진을 생성합니다." +
-                             "매거진 이름, 매거진 요약, 매거진 내용, 매거진 카드 정보(order와 cardUrl) 리스트를 받아 매거진을 생성합니다." +
-                             "태그는 이후 다른 API를 통해 추가합니다.")
+               description = "Swagger 폼 입력 방식으로 매거진을 생성합니다. `cards[0].order`, `cards[0].cardUrl`과 같은 필드로 카드 이미지를 입력하세요. " +
+                             "태그는 추후 별도 API로 연결합니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "생성 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    public ResponseEntity<ApiResponseDto<Long>> createMagazine(
-            @Valid @RequestBody CreateMagazineRequestDto request) {
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                    schema = @Schema(implementation = CreateMagazineRequestDto.class))
+    )
+    public ResponseEntity<ApiResponseDto<Long>> createMagazineForm(
+            @Valid @ModelAttribute CreateMagazineRequestDto request) {
 
-        log.info("매거진 생성 요청");
-
-        try {
-            Long magazineId = magazineService.createMagazine(request);
-            return ResponseEntity.ok(ApiResponseDto.success("매거진이 생성되었습니다.", magazineId));
-        } catch (Exception e) {
-            log.error("매거진 생성 중 오류 발생: ", e);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponseDto.error("매거진 생성 중 오류가 발생했습니다: " + e.getMessage()));
-        }
+        return handleCreateMagazine(request);
     }
 
     @PutMapping("/magazines/{magazineId}")
@@ -408,48 +416,52 @@ public class AdminController {
 
     // ========== 광고 관련 ==========
 
-    @PostMapping("/advertise/official")
-    @Operation(summary = "공식 광고 생성",
-               description = "관리자가 새로운 공식 광고를 생성합니다.")
-    @ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "생성 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
-    })
-    public ResponseEntity<ApiResponseDto<Long>> createOfficialAd(
+    @PostMapping(value = "/advertise/official", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(hidden = true)
+    public ResponseEntity<ApiResponseDto<Long>> createOfficialAdJson(
             @Valid @RequestBody CreateOfficialAdRequestDto request) {
-
-        log.info("공식 광고 생성 요청");
-
-        try {
-            Long adId = advertiseService.createOfficialAd(request);
-            return ResponseEntity.ok(ApiResponseDto.success("공식 광고가 생성되었습니다.", adId));
-        } catch (Exception e) {
-            log.error("공식 광고 생성 중 오류 발생: ", e);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponseDto.error("공식 광고 생성 중 오류가 발생했습니다: " + e.getMessage()));
-        }
+        return handleCreateOfficialAd(request);
     }
 
-    @PostMapping("/advertise/private")
-    @Operation(summary = "개인 광고 생성",
-               description = "관리자가 새로운 개인 광고를 생성합니다.")
+    @PostMapping(value = "/advertise/official", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "공식 광고 생성",
+               description = "Swagger 폼 입력으로 공식 광고를 생성합니다. 이미지 URL, 노출 기간, 링크 등을 각각 입력하면 됩니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "생성 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    public ResponseEntity<ApiResponseDto<Long>> createPrivateAd(
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                    schema = @Schema(implementation = CreateOfficialAdRequestDto.class))
+    )
+    public ResponseEntity<ApiResponseDto<Long>> createOfficialAdForm(
+            @Valid @ModelAttribute CreateOfficialAdRequestDto request) {
+
+        return handleCreateOfficialAd(request);
+    }
+
+    @PostMapping(value = "/advertise/private", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(hidden = true)
+    public ResponseEntity<ApiResponseDto<Long>> createPrivateAdJson(
             @Valid @RequestBody CreatePrivateAdRequestDto request) {
+        return handleCreatePrivateAd(request);
+    }
 
-        log.info("개인 광고 생성 요청");
+    @PostMapping(value = "/advertise/private", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "개인 광고 생성",
+               description = "Swagger 폼 입력으로 개인 광고를 생성합니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "생성 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                    schema = @Schema(implementation = CreatePrivateAdRequestDto.class))
+    )
+    public ResponseEntity<ApiResponseDto<Long>> createPrivateAdForm(
+            @Valid @ModelAttribute CreatePrivateAdRequestDto request) {
 
-        try {
-            Long adId = advertiseService.createPrivateAd(request);
-            return ResponseEntity.ok(ApiResponseDto.success("개인 광고가 생성되었습니다.", adId));
-        } catch (Exception e) {
-            log.error("개인 광고 생성 중 오류 발생: ", e);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponseDto.error("개인 광고 생성 중 오류가 발생했습니다: " + e.getMessage()));
-        }
+        return handleCreatePrivateAd(request);
     }
 
     @GetMapping("/places")
@@ -494,6 +506,56 @@ public class AdminController {
             log.error("전체 리뷰 목록 조회 중 오류 발생: ", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponseDto.error("전체 리뷰 목록을 조회하는 중 오류가 발생했습니다."));
+        }
+    }
+
+    // ========== 공통 핸들러 ==========
+
+    private ResponseEntity<ApiResponseDto<Long>> handleCreatePlace(CreatePlaceRequestDto request, List<MultipartFile> photos) {
+        log.info("장소 생성 요청: name={}", request.getName());
+        try {
+            Long placeId = placeService.createPlace(request, photos);
+            return ResponseEntity.ok(ApiResponseDto.success("장소가 생성되었습니다.", placeId));
+        } catch (Exception e) {
+            log.error("장소 생성 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("장소 생성 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    private ResponseEntity<ApiResponseDto<Long>> handleCreateMagazine(CreateMagazineRequestDto request) {
+        log.info("매거진 생성 요청: name={}", request.getName());
+        try {
+            Long magazineId = magazineService.createMagazine(request);
+            return ResponseEntity.ok(ApiResponseDto.success("매거진이 생성되었습니다.", magazineId));
+        } catch (Exception e) {
+            log.error("매거진 생성 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("매거진 생성 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    private ResponseEntity<ApiResponseDto<Long>> handleCreateOfficialAd(CreateOfficialAdRequestDto request) {
+        log.info("공식 광고 생성 요청: title={}", request.getTitle());
+        try {
+            Long adId = advertiseService.createOfficialAd(request);
+            return ResponseEntity.ok(ApiResponseDto.success("공식 광고가 생성되었습니다.", adId));
+        } catch (Exception e) {
+            log.error("공식 광고 생성 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("공식 광고 생성 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    private ResponseEntity<ApiResponseDto<Long>> handleCreatePrivateAd(CreatePrivateAdRequestDto request) {
+        log.info("개인 광고 생성 요청: title={}", request.getTitle());
+        try {
+            Long adId = advertiseService.createPrivateAd(request);
+            return ResponseEntity.ok(ApiResponseDto.success("개인 광고가 생성되었습니다.", adId));
+        } catch (Exception e) {
+            log.error("개인 광고 생성 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("개인 광고 생성 중 오류가 발생했습니다: " + e.getMessage()));
         }
     }
 }

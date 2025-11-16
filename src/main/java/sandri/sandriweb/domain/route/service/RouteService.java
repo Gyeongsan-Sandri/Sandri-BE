@@ -6,11 +6,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sandri.sandriweb.domain.route.dto.*;
+import sandri.sandriweb.domain.favorite.dto.FavoriteRouteDto;
 import sandri.sandriweb.domain.route.entity.Route;
 import sandri.sandriweb.domain.route.entity.RouteLocation;
 import sandri.sandriweb.domain.route.entity.RouteParticipant;
+import sandri.sandriweb.domain.route.entity.UserRoute;
 import sandri.sandriweb.domain.route.repository.RouteParticipantRepository;
 import sandri.sandriweb.domain.route.repository.RouteRepository;
+import sandri.sandriweb.domain.route.repository.UserRouteRepository;
 import sandri.sandriweb.domain.route.util.QrCodeGenerator;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
@@ -29,6 +32,7 @@ public class RouteService {
     private final RouteRepository routeRepository;
     private final RouteParticipantRepository participantRepository;
     private final UserRepository userRepository;
+    private final UserRouteRepository userRouteRepository;
     
     @Value("${app.base-url}")
     private String baseUrl;
@@ -38,7 +42,6 @@ public class RouteService {
         try {
             Route route = Route.builder()
                     .title(request.getTitle())
-                    .description(request.getDescription())
                     .startDate(request.getStartDate())
                     .endDate(request.getEndDate())
                     .creator(creator)
@@ -115,9 +118,6 @@ public class RouteService {
             if (request.getTitle() != null) {
                 route.updateTitle(request.getTitle());
             }
-            if (request.getDescription() != null) {
-                route.updateDescription(request.getDescription());
-            }
             if (request.getStartDate() != null && request.getEndDate() != null) {
                 route.updateDates(request.getStartDate(), request.getEndDate());
             }
@@ -175,11 +175,11 @@ public class RouteService {
         }
     }
     
-    public ApiResponseDto<List<RouteResponseDto>> getUserRoutes(User user) {
+    public ApiResponseDto<List<RouteListDto>> getUserRoutes(User user) {
         try {
             List<Route> routes = routeRepository.findByParticipantOrCreator(user);
-            List<RouteResponseDto> response = routes.stream()
-                    .map(RouteResponseDto::from)
+            List<RouteListDto> response = routes.stream()
+                    .map(RouteListDto::from)
                     .collect(Collectors.toList());
             
             return ApiResponseDto.success(response);
@@ -188,6 +188,49 @@ public class RouteService {
             log.error("사용자 루트 조회 실패: {}", e.getMessage(), e);
             return ApiResponseDto.error(e.getMessage());
         }
+    }
+
+    @Transactional
+    public boolean toggleLike(Long routeId, Long userId) {
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new RuntimeException("루트를 찾을 수 없습니다."));
+
+        if (!userRepository.existsById(userId)) {
+            throw new RuntimeException("사용자를 찾을 수 없습니다.");
+        }
+
+        return userRouteRepository.findByUserIdAndRouteId(userId, routeId)
+                .map(userRoute -> {
+                    if (userRoute.isEnabled()) {
+                        userRoute.disable();
+                        userRouteRepository.save(userRoute);
+                        return false;
+                    } else {
+                        userRoute.enable();
+                        userRouteRepository.save(userRoute);
+                        return true;
+                    }
+                })
+                .orElseGet(() -> {
+                    User user = userRepository.getReferenceById(userId);
+                    UserRoute newUserRoute = UserRoute.builder()
+                            .user(user)
+                            .route(route)
+                            .build();
+                    userRouteRepository.save(newUserRoute);
+                    return true;
+                });
+    }
+
+    public List<FavoriteRouteDto> getLikedRoutes(Long userId) {
+        List<Route> routes = userRouteRepository.findLikedRoutesByUserId(userId);
+        if (routes.isEmpty()) {
+            return List.of();
+        }
+
+        return routes.stream()
+                .map(FavoriteRouteDto::from)
+                .collect(Collectors.toList());
     }
     
     @Transactional

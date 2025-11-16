@@ -36,5 +36,30 @@ public interface UserPlaceRepository extends JpaRepository<UserPlace, Long> {
            "AND up.place.id IN :placeIds " +
            "AND up.enabled = true")
     List<Long> findLikedPlaceIdsByUserId(@Param("userId") Long userId, @Param("placeIds") List<Long> placeIds);
+
+    /**
+     * 특정 사용자가 좋아요한 장소 목록 조회 (최신순)
+     */
+    @Query("SELECT up.place " +
+           "FROM UserPlace up " +
+           "WHERE up.user.id = :userId " +
+           "AND up.enabled = true " +
+           "ORDER BY up.updatedAt DESC")
+    List<sandri.sandriweb.domain.place.entity.Place> findLikedPlacesByUserId(@Param("userId") Long userId);
+
+    /**
+     * 최근 기간 가중치 기반 HOT 관광지 집계
+     */
+    @Query(value = "SELECT up.place_id AS placeId, " +
+            "COUNT(*) AS totalLikes, " +
+            "SUM(CASE WHEN up.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END) AS recentLikes " +
+            "FROM place_likes up " +
+            "WHERE up.enabled = true " +
+            "GROUP BY up.place_id " +
+            "ORDER BY (COUNT(*) + :alpha * SUM(CASE WHEN up.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END)) DESC " +
+            "LIMIT :limit", nativeQuery = true)
+    List<Object[]> findHotPlaces(@Param("limit") int limit,
+                                 @Param("recentDays") int recentDays,
+                                 @Param("alpha") double alpha);
 }
 

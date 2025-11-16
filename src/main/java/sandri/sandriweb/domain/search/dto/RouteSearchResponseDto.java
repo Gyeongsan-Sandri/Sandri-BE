@@ -43,9 +43,6 @@ public class RouteSearchResponseDto {
         @Schema(description = "루트 제목", example = "빵순이를 위한 빵 루트")
         private String title;
 
-        @Schema(description = "루트 설명", example = "경산의 맛있는 빵집들을 모은 루트입니다")
-        private String description;
-
         @Schema(description = "시작 날짜", example = "2025-06-01")
         private LocalDate startDate;
 
