@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.List;
 
@@ -13,6 +14,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Setter
 @Schema(description = "매거진 생성 요청 DTO")
 public class CreateMagazineRequestDto {
 
@@ -26,7 +28,10 @@ public class CreateMagazineRequestDto {
     @Schema(description = "매거진 내용", example = "경주는 신라 천년의 고도로...")
     private String content;
 
-    @Schema(description = "매거진 카드 정보 리스트 (order와 cardUrl)", example = "[]")
+    @Schema(
+            description = "카드 정보 리스트 (order와 cardUrl). Swagger 폼에서는 cards[0].order 형태로 입력합니다.",
+            example = "[{\"order\":0,\"cardUrl\":\"https://s3.../card1.jpg\"}]"
+    )
     private List<MagazineCardInfoDto> cards;
 }
 

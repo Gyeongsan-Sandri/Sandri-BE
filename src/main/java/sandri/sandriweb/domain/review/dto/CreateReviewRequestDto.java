@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.List;
 
@@ -13,6 +14,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Setter
 @Schema(description = "리뷰 작성 요청 DTO")
 public class CreateReviewRequestDto {
     
@@ -34,6 +36,7 @@ public class CreateReviewRequestDto {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @Setter
     @Schema(description = "리뷰 사진 정보")
     public static class PhotoInfo {
         @NotBlank(message = "사진 URL은 필수입니다")

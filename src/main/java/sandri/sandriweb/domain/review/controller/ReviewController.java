@@ -7,10 +7,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 import sandri.sandriweb.domain.review.dto.CursorResponseDto;
 import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.review.dto.CreateReviewRequestDto;
@@ -194,44 +194,37 @@ public class ReviewController {
         }
     }
 
-    @PostMapping("/api/places/{placeId}/reviews")
-    @Operation(summary = "리뷰 작성", 
-               description = "리뷰 작성 및 수정 페이지에서 리뷰 업로드 시 호출합니다." +
-                             "별점, 리뷰 내용, 사진(순서, finalUrl)을 전송하면 리뷰를 작성하고 작성한 리뷰 ID를 반환합니다." +
-                             "같은 사용자는 한 장소에 대해 리뷰 하나만 작성가능합니다." +
-                             "finalUrl은 프론트에서 getPresignedUrls 호출 시 발급됩니다. 업로드에 성공한 finalUrl을 사용해주세요. " +
-                             "작성한 리뷰의 상세 정보가 필요하면 GET /api/me/reviews/{reviewId} API를 호출하세요.")
+    @PostMapping(value = "/api/places/{placeId}/reviews", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(hidden = true)
+    public ResponseEntity<ApiResponseDto<Long>> createReviewJson(
+            Authentication authentication,
+            @PathVariable Long placeId,
+            @Valid @RequestBody CreateReviewRequestDto request) {
+        return createReviewInternal(authentication, placeId, request);
+    }
+
+    @PostMapping(value = "/api/places/{placeId}/reviews", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "리뷰 작성",
+               description = "Swagger 폼에서 별점, 리뷰 내용, 사진 URL(order 포함)을 입력하면 리뷰를 생성합니다." +
+                             "사진은 `/api/me/files`로 Presigned URL을 먼저 발급받아 업로드한 뒤 finalUrl을 사용하세요.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "리뷰 작성 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "장소 없음")
     })
-    public ResponseEntity<ApiResponseDto<Long>> createReview(
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @io.swagger.v3.oas.annotations.media.Content(
+                    mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                    schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = CreateReviewRequestDto.class)
+            )
+    )
+    public ResponseEntity<ApiResponseDto<Long>> createReviewForm(
             Authentication authentication,
             @Parameter(description = "장소 ID", example = "1")
             @PathVariable Long placeId,
-            @Valid @RequestBody CreateReviewRequestDto request) {
-
-        String username = authentication.getName();
-        log.info("리뷰 작성 요청: username={}, placeId={}", username, placeId);
-
-        try {
-            // username으로 User 조회
-            User user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
-
-            Long reviewId = reviewService.createReview(user, placeId, request);
-            return ResponseEntity.ok(ApiResponseDto.success(reviewId));
-        } catch (RuntimeException e) {
-            log.error("리뷰 작성 실패: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                    .body(ApiResponseDto.error(e.getMessage()));
-        } catch (Exception e) {
-            log.error("리뷰 작성 중 오류 발생: ", e);
-            return ResponseEntity.badRequest()
-                    .body(ApiResponseDto.error("리뷰 작성 중 오류가 발생했습니다."));
-        }
+            @Valid @ModelAttribute CreateReviewRequestDto request) {
+        return createReviewInternal(authentication, placeId, request);
     }
 
     @GetMapping("/api/me/reviews/{reviewId}")
@@ -322,6 +315,29 @@ public class ReviewController {
             log.error("리뷰 수정 중 오류 발생: ", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponseDto.error("리뷰 수정 중 오류가 발생했습니다."));
+        }
+    }
+
+    private ResponseEntity<ApiResponseDto<Long>> createReviewInternal(Authentication authentication,
+                                                                      Long placeId,
+                                                                      CreateReviewRequestDto request) {
+        String username = authentication.getName();
+        log.info("리뷰 작성 요청: username={}, placeId={}", username, placeId);
+
+        try {
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+
+            Long reviewId = reviewService.createReview(user, placeId, request);
+            return ResponseEntity.ok(ApiResponseDto.success(reviewId));
+        } catch (RuntimeException e) {
+            log.error("리뷰 작성 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("리뷰 작성 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("리뷰 작성 중 오류가 발생했습니다."));
         }
     }
 

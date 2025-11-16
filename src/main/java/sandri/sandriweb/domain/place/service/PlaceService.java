@@ -2,11 +2,15 @@ package sandri.sandriweb.domain.place.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 import sandri.sandriweb.domain.admin.dto.CreatePlacePhotoRequestDto;
 import sandri.sandriweb.domain.place.dto.*;
 import sandri.sandriweb.domain.place.entity.Place;
@@ -20,11 +24,15 @@ import sandri.sandriweb.domain.place.repository.UserPlaceRepository;
 import sandri.sandriweb.domain.review.service.ReviewService;
 import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
+import sandri.sandriweb.global.service.GoogleGeocodingService;
+import sandri.sandriweb.global.service.S3Service;
+import sandri.sandriweb.global.service.dto.GeocodingResult;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +46,8 @@ public class PlaceService {
     private final ReviewService reviewService;
     private final UserPlaceRepository userPlaceRepository;
     private final UserRepository userRepository;
+    private final GoogleGeocodingService googleGeocodingService;
+    private final S3Service s3Service;
     
     private static final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
@@ -489,26 +499,23 @@ public class PlaceService {
      * @return 생성된 장소 ID
      */
     @Transactional
-    public Long createPlace(CreatePlaceRequestDto request) {
+    public Long createPlace(CreatePlaceRequestDto request, List<MultipartFile> photoFiles) {
         // 중복 검사
         if (placeRepository.existsByName(request.getName())) {
             throw new RuntimeException("이미 존재하는 장소 이름입니다: " + request.getName());
         }
 
-        // 좌표 범위 검증
-        if (request.getLatitude() < -90 || request.getLatitude() > 90) {
-            throw new RuntimeException("위도는 -90 ~ 90 사이여야 합니다: " + request.getLatitude());
-        }
-        if (request.getLongitude() < -180 || request.getLongitude() > 180) {
-            throw new RuntimeException("경도는 -180 ~ 180 사이여야 합니다: " + request.getLongitude());
-        }
+        Coordinate coordinate = resolveCoordinate(request);
+        double latitude = coordinate.getY();
+        double longitude = coordinate.getX();
+        validateCoordinateRange(latitude, longitude);
 
-        // 위도/경도를 Point로 변환
-        Point location = geometryFactory.createPoint(
-                new org.locationtech.jts.geom.Coordinate(request.getLongitude(), request.getLatitude())
-        );
+        String resolvedAddress = StringUtils.hasText(request.getAddress())
+                ? request.getAddress()
+                : null;
 
         // 같은 location을 가진 enabled된 Place가 있으면 disable 처리 (거리 0m 이내)
+        Point location = geometryFactory.createPoint(coordinate);
         List<Place> nearbyPlaces = placeRepository.findNearbyPlaces(location, 0.0, -1L, 1);
         if (!nearbyPlaces.isEmpty()) {
             Place existingPlace = nearbyPlaces.get(0);
@@ -521,7 +528,7 @@ public class PlaceService {
         // Place 생성
         Place place = Place.builder()
                 .name(request.getName())
-                .address(request.getAddress())
+                .address(resolvedAddress)
                 .location(location)
                 .summery(request.getSummary())
                 .information(request.getInformation())
@@ -532,7 +539,83 @@ public class PlaceService {
         Place savedPlace = placeRepository.save(place);
         log.info("장소 생성 완료: placeId={}, name={}", savedPlace.getId(), savedPlace.getName());
 
+        attachUploadedPhotos(savedPlace, photoFiles);
+
         return savedPlace.getId();
+    }
+
+    private Coordinate resolveCoordinate(CreatePlaceRequestDto request) {
+        Double latitude = request.getLatitude();
+        Double longitude = request.getLongitude();
+
+        boolean hasLatitude = latitude != null;
+        boolean hasLongitude = longitude != null;
+
+        if (hasLatitude && hasLongitude) {
+            return new Coordinate(longitude, latitude);
+        }
+
+        if (hasLatitude ^ hasLongitude) {
+            throw new RuntimeException("위도와 경도는 함께 입력해야 합니다.");
+        }
+
+        if (!StringUtils.hasText(request.getAddress())) {
+            throw new RuntimeException("주소 또는 위도/경도 중 하나는 반드시 입력해야 합니다.");
+        }
+
+        GeocodingResult geocodingResult = googleGeocodingService.geocode(request.getAddress())
+                .orElseThrow(() -> new RuntimeException("입력한 주소로 좌표를 찾을 수 없습니다. 주소를 다시 확인해주세요."));
+
+        request.setLatitude(geocodingResult.getLatitude());
+        request.setLongitude(geocodingResult.getLongitude());
+        if (!StringUtils.hasText(request.getAddress()) && StringUtils.hasText(geocodingResult.getFormattedAddress())) {
+            request.setAddress(geocodingResult.getFormattedAddress());
+        }
+
+        log.info("주소를 통한 좌표 변환 성공: address={}, lat={}, lng={}", request.getAddress(),
+                geocodingResult.getLatitude(), geocodingResult.getLongitude());
+
+        return new Coordinate(geocodingResult.getLongitude(), geocodingResult.getLatitude());
+    }
+
+    private void validateCoordinateRange(double latitude, double longitude) {
+        if (latitude < -90 || latitude > 90) {
+            throw new RuntimeException("위도는 -90 ~ 90 사이여야 합니다: " + latitude);
+        }
+        if (longitude < -180 || longitude > 180) {
+            throw new RuntimeException("경도는 -180 ~ 180 사이여야 합니다: " + longitude);
+        }
+    }
+
+    private void attachUploadedPhotos(Place place, List<MultipartFile> photoFiles) {
+        if (CollectionUtils.isEmpty(photoFiles)) {
+            return;
+        }
+
+        List<MultipartFile> validFiles = photoFiles.stream()
+                .filter(Objects::nonNull)
+                .filter(file -> !file.isEmpty())
+                .collect(Collectors.toList());
+
+        if (validFiles.isEmpty()) {
+            return;
+        }
+
+        List<String> uploadedUrls = s3Service.uploadFiles(validFiles);
+        List<PlacePhoto> placePhotos = new ArrayList<>();
+        for (int i = 0; i < uploadedUrls.size(); i++) {
+            placePhotos.add(PlacePhoto.builder()
+                    .place(place)
+                    .photoUrl(uploadedUrls.get(i))
+                    .order(i)
+                    .enabled(true)
+                    .build());
+        }
+
+        if (!placePhotos.isEmpty()) {
+            placePhotoRepository.saveAll(placePhotos);
+            log.info("장소 사진 업로드 완료: placeId={}, photoCount={}", place.getId(), placePhotos.size());
+        }
     }
 
     /**
