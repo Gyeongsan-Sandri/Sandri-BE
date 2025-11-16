@@ -46,5 +46,20 @@ public interface UserPlaceRepository extends JpaRepository<UserPlace, Long> {
            "AND up.enabled = true " +
            "ORDER BY up.updatedAt DESC")
     List<sandri.sandriweb.domain.place.entity.Place> findLikedPlacesByUserId(@Param("userId") Long userId);
+
+    /**
+     * 최근 기간 가중치 기반 HOT 관광지 집계
+     */
+    @Query(value = "SELECT up.place_id AS placeId, " +
+            "COUNT(*) AS totalLikes, " +
+            "SUM(CASE WHEN up.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END) AS recentLikes " +
+            "FROM place_likes up " +
+            "WHERE up.enabled = true " +
+            "GROUP BY up.place_id " +
+            "ORDER BY (COUNT(*) + :alpha * SUM(CASE WHEN up.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END)) DESC " +
+            "LIMIT :limit", nativeQuery = true)
+    List<Object[]> findHotPlaces(@Param("limit") int limit,
+                                 @Param("recentDays") int recentDays,
+                                 @Param("alpha") double alpha);
 }
 

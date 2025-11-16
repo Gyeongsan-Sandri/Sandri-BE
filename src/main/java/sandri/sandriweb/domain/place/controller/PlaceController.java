@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.place.dto.SimplePlaceDto;
 import sandri.sandriweb.domain.place.dto.NearbyPlaceDto;
 import sandri.sandriweb.domain.place.dto.PlaceDetailResponseDto;
+import sandri.sandriweb.domain.place.dto.HotPlaceDto;
 import sandri.sandriweb.domain.place.service.PlaceService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
@@ -226,5 +227,17 @@ public class PlaceController {
     }
 
 
+    @GetMapping("/hot")
+    @Operation(summary = "HOT 관광지 조회",
+            description = "좋아요 수와 최근 활동 가중치를 기반으로 인기 관광지를 순위대로 반환합니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    public ResponseEntity<ApiResponseDto<List<HotPlaceDto>>> getHotPlaces() {
+
+        List<HotPlaceDto> hotPlaces = placeService.getHotPlaces(5);
+        return ResponseEntity.ok(ApiResponseDto.success(hotPlaces));
+    }
 }
 

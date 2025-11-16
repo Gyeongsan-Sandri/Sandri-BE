@@ -727,5 +727,62 @@ public class PlaceService {
         return null;
     }
 
+    private static final int HOT_RECENT_DAYS = 7;
+    private static final double HOT_ALPHA = 0.7;
+
+    /**
+     * HOT 관광지 조회
+     */
+    public List<HotPlaceDto> getHotPlaces(int limit) {
+        int fetchSize = Math.min(Math.max(limit, 1), 20);
+
+        List<Object[]> ranking = userPlaceRepository.findHotPlaces(fetchSize, HOT_RECENT_DAYS, HOT_ALPHA);
+        if (ranking.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> placeIds = ranking.stream()
+                .map(row -> ((Number) row[0]).longValue())
+                .collect(Collectors.toList());
+
+        Map<Long, Place> placeMap = placeRepository.findAllById(placeIds).stream()
+                .collect(Collectors.toMap(Place::getId, place -> place));
+
+        Map<Long, String> thumbnailMap = placePhotoRepository.findFirstPhotoUrlByPlaceIdIn(placeIds).stream()
+                .collect(Collectors.toMap(
+                        row -> ((Number) row[0]).longValue(),
+                        row -> (String) row[1]
+                ));
+
+        List<HotPlaceDto> hotPlaces = new ArrayList<>();
+        int rank = 1;
+        for (Object[] row : ranking) {
+            Long placeId = ((Number) row[0]).longValue();
+            Place place = placeMap.get(placeId);
+            if (place == null) {
+                continue;
+            }
+
+            Long totalLikes = row[1] != null ? ((Number) row[1]).longValue() : 0L;
+            Long recentLikes = row[2] != null ? ((Number) row[2]).longValue() : 0L;
+
+            hotPlaces.add(HotPlaceDto.builder()
+                    .rank(rank++)
+                    .placeId(place.getId())
+                    .name(place.getName())
+                    .address(place.getAddress())
+                    .thumbnailUrl(thumbnailMap.get(placeId))
+                    .categoryName(place.getCategory() != null ? place.getCategory().getDisplayName() : null)
+                    .totalLikes(totalLikes)
+                    .recentLikes(recentLikes)
+                    .build());
+
+            if (hotPlaces.size() >= limit) {
+                break;
+            }
+        }
+
+        return hotPlaces;
+    }
 }
 
