@@ -36,5 +36,15 @@ public interface UserPlaceRepository extends JpaRepository<UserPlace, Long> {
            "AND up.place.id IN :placeIds " +
            "AND up.enabled = true")
     List<Long> findLikedPlaceIdsByUserId(@Param("userId") Long userId, @Param("placeIds") List<Long> placeIds);
+
+    /**
+     * 특정 사용자가 좋아요한 장소 목록 조회 (최신순)
+     */
+    @Query("SELECT up.place " +
+           "FROM UserPlace up " +
+           "WHERE up.user.id = :userId " +
+           "AND up.enabled = true " +
+           "ORDER BY up.updatedAt DESC")
+    List<sandri.sandriweb.domain.place.entity.Place> findLikedPlacesByUserId(@Param("userId") Long userId);
 }
 

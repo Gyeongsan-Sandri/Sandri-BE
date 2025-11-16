@@ -364,6 +364,7 @@ public class MagazineService {
                         cardsToSave.add(newCard);
                     }
                 }
+
             }
             
             // 변경사항 저장
@@ -379,6 +380,51 @@ public class MagazineService {
                  magazine.getId(), magazine.getName());
 
         return magazine.getId();
+    }
+
+    /**
+     * 사용자가 관심 등록한 매거진 목록 조회
+     */
+    public List<MagazineListDto> getLikedMagazines(Long userId) {
+        List<Magazine> magazines = userMagazineRepository.findLikedMagazinesByUserId(userId);
+        if (magazines.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> magazineIds = magazines.stream()
+                .map(Magazine::getId)
+                .collect(Collectors.toList());
+
+        List<MagazineTag> magazineTags = magazineTagRepository.findByMagazineIdInWithTag(magazineIds);
+        Map<Long, List<MagazineTag>> tagsByMagazineId = magazineTags.stream()
+                .collect(Collectors.groupingBy(mt -> mt.getMagazine().getId()));
+
+        return magazines.stream()
+                .map(magazine -> {
+                    String thumbnail = null;
+                    if (magazine.getCards() != null && !magazine.getCards().isEmpty()) {
+                        thumbnail = magazine.getCards().get(0).getCardUrl();
+                    }
+
+                    List<TagDto> tagDtos = tagsByMagazineId.getOrDefault(magazine.getId(), List.of()).stream()
+                            .map(MagazineTag::getTag)
+                            .filter(tag -> tag != null && tag.isEnabled())
+                            .map(tag -> TagDto.builder()
+                                    .tagId(tag.getId())
+                                    .name(tag.getName())
+                                    .build())
+                            .collect(Collectors.toList());
+
+                    return MagazineListDto.builder()
+                            .magazineId(magazine.getId())
+                            .title(magazine.getName())
+                            .thumbnail(thumbnail)
+                            .summary(magazine.getSummary())
+                            .isLiked(true)
+                            .tags(tagDtos)
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 
     /**
