@@ -42,6 +42,9 @@ public class UserResponseDto {
     
     @Schema(description = "경도", example = "128.7405")
     private Double longitude;
+
+    @Schema(description = "포인트", example = "1200")
+    private Long point;
     
     @Schema(description = "추천인 아이디", example = "friend123")
     private String referrerUsername;
@@ -63,6 +66,7 @@ public class UserResponseDto {
                 .location(user.getLocation())
                 .latitude(user.getLatitude())
                 .longitude(user.getLongitude())
+                .point(user.getPoint())
                 .referrerUsername(user.getReferrerUsername())
                 .enabled(user.isEnabled())
                 .travelStyle(user.getTravelStyle())

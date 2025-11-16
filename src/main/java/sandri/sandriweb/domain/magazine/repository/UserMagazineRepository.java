@@ -30,5 +30,15 @@ public interface UserMagazineRepository extends JpaRepository<UserMagazine, Long
            "AND um.magazine.id IN :magazineIds " +
            "AND um.enabled = true")
     List<Long> findLikedMagazineIdsByUserId(@Param("userId") Long userId, @Param("magazineIds") List<Long> magazineIds);
+
+    /**
+     * 특정 사용자가 좋아요한 매거진 목록 조회 (최신순)
+     */
+    @Query("SELECT um.magazine " +
+           "FROM UserMagazine um " +
+           "WHERE um.user.id = :userId " +
+           "AND um.enabled = true " +
+           "ORDER BY um.updatedAt DESC")
+    List<sandri.sandriweb.domain.magazine.entity.Magazine> findLikedMagazinesByUserId(@Param("userId") Long userId);
 }
 
