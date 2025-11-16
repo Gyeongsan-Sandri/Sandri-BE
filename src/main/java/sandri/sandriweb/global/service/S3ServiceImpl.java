@@ -3,6 +3,7 @@ package sandri.sandriweb.global.service;
 import com.amazonaws.HttpMethod;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import sandri.sandriweb.domain.review.dto.PresignedUrlDto;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.time.Instant;
 import java.util.Date;
@@ -44,9 +47,26 @@ public class S3ServiceImpl implements S3Service {
 
     @Override
     public String uploadFile(MultipartFile file) {
-        // TODO: AWS S3 SDK를 사용한 실제 업로드 구현
-        log.warn("AWS S3 업로드가 아직 구현되지 않았습니다. 파일명: {}", file.getOriginalFilename());
-        throw new UnsupportedOperationException("AWS S3 업로드 기능이 아직 구현되지 않았습니다. AWS SDK 설정이 필요합니다.");
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("업로드할 파일이 비어 있습니다.");
+        }
+
+        String uniqueFileName = generateUniqueFileName("places", file.getOriginalFilename());
+
+        ObjectMetadata metadata = new ObjectMetadata();
+        metadata.setContentType(file.getContentType());
+        metadata.setContentLength(file.getSize());
+
+        try (InputStream inputStream = file.getInputStream()) {
+            amazonS3Client.putObject(bucketName, uniqueFileName, inputStream, metadata);
+        } catch (IOException e) {
+            log.error("S3 업로드 실패 - fileName={}", file.getOriginalFilename(), e);
+            throw new RuntimeException("파일 업로드 중 오류가 발생했습니다.", e);
+        }
+
+        String finalUrl = getBaseUrl() + "/" + uniqueFileName;
+        log.debug("S3 업로드 완료 - key={}, url={}", uniqueFileName, finalUrl);
+        return finalUrl;
     }
 
     @Override
@@ -103,17 +123,24 @@ public class S3ServiceImpl implements S3Service {
      * 고유한 파일명 생성 (UUID + 원본 파일명)
      */
     private String generateUniqueFileName(String originalFileName) {
+        return generateUniqueFileName("reviews", originalFileName);
+    }
+
+    private String generateUniqueFileName(String folder, String originalFileName) {
+        String safeFileName = originalFileName != null ? originalFileName : "uploaded";
         String extension = "";
-        int lastDotIndex = originalFileName.lastIndexOf('.');
+        int lastDotIndex = safeFileName.lastIndexOf('.');
         if (lastDotIndex > 0) {
-            extension = originalFileName.substring(lastDotIndex);
-            originalFileName = originalFileName.substring(0, lastDotIndex);
+            extension = safeFileName.substring(lastDotIndex);
+            safeFileName = safeFileName.substring(0, lastDotIndex);
         }
-        
+
+        safeFileName = safeFileName.replaceAll("[^a-zA-Z0-9-_]", "_");
+
         String timestamp = String.valueOf(Instant.now().toEpochMilli());
         String uuid = UUID.randomUUID().toString().substring(0, 8);
-        
-        return String.format("reviews/%s_%s_%s%s", timestamp, uuid, originalFileName, extension);
+
+        return String.format("%s/%s_%s_%s%s", folder, timestamp, uuid, safeFileName, extension);
     }
 }
 
