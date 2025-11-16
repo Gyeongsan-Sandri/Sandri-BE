@@ -27,6 +27,8 @@ import sandri.sandriweb.domain.place.dto.CreatePlaceFormRequestDto;
 import sandri.sandriweb.domain.place.dto.PlaceListDto;
 import sandri.sandriweb.domain.place.dto.UpdatePlaceRequestDto;
 import sandri.sandriweb.domain.place.service.PlaceService;
+import sandri.sandriweb.domain.point.dto.CreatePointEarnConditionRequestDto;
+import sandri.sandriweb.domain.point.service.PointService;
 import sandri.sandriweb.domain.review.dto.ReviewListDto;
 import sandri.sandriweb.domain.review.service.ReviewService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
@@ -44,6 +46,7 @@ public class AdminController {
     private final MagazineService magazineService;
     private final AdvertiseService advertiseService;
     private final ReviewService reviewService;
+    private final PointService pointService;
 
     // ========== 장소 관련 ==========
 
@@ -506,6 +509,36 @@ public class AdminController {
             log.error("전체 리뷰 목록 조회 중 오류 발생: ", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponseDto.error("전체 리뷰 목록을 조회하는 중 오류가 발생했습니다."));
+        }
+    }
+
+    // ========== 포인트 관련 ==========
+
+    @PostMapping("/point/conditions")
+    @Operation(summary = "포인트 적립 조건 등록/수정",
+               description = "포인트 적립 조건을 등록하거나 수정합니다. " +
+                             "조건 타입(conditionType)은 unique하므로, 이미 존재하는 조건 타입이면 포인트 양만 업데이트되고, " +
+                             "존재하지 않는 조건 타입이면 새로 생성됩니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "등록/수정 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    public ResponseEntity<ApiResponseDto<Long>> createOrUpdatePointEarnCondition(
+            @Valid @RequestBody CreatePointEarnConditionRequestDto request) {
+
+        log.info("포인트 적립 조건 등록/수정 요청: conditionType={}, pointAmount={}",
+                request.getConditionType(), request.getPointAmount());
+
+        try {
+            Long conditionId = pointService.createOrUpdateEarnCondition(
+                    request.getConditionType(),
+                    request.getPointAmount()
+            );
+            return ResponseEntity.ok(ApiResponseDto.success("포인트 적립 조건이 등록/수정되었습니다.", conditionId));
+        } catch (Exception e) {
+            log.error("포인트 적립 조건 등록/수정 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("포인트 적립 조건 등록/수정 중 오류가 발생했습니다: " + e.getMessage()));
         }
     }
 
