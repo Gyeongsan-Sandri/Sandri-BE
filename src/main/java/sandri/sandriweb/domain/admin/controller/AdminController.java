@@ -3,7 +3,9 @@ package sandri.sandriweb.domain.admin.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -518,11 +520,65 @@ public class AdminController {
     @Operation(summary = "포인트 적립 조건 등록/수정",
                description = "포인트 적립 조건을 등록하거나 수정합니다. " +
                              "조건 타입(conditionType)은 unique하므로, 이미 존재하는 조건 타입이면 포인트 양만 업데이트되고, " +
-                             "존재하지 않는 조건 타입이면 새로 생성됩니다.")
+                             "존재하지 않는 조건 타입이면 새로 생성됩니다. " +
+                             "(현재 conditionType: SIGN_UP, REFERRAL, PLACE_VISIT, REVIEW_CREATE, REVIEW_WITH_PHOTO, PROFILE_COMPLETE) " +
+                             "pointAmount는 0 이상의 값이어야 합니다.")
     @ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "등록/수정 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "등록/수정 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseDto.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "새로운 조건 생성",
+                                            value = "{\n  \"success\": true,\n  \"message\": \"포인트 적립 조건이 등록/수정되었습니다.\",\n  \"data\": 1\n}"
+                                    ),
+                                    @ExampleObject(
+                                            name = "기존 조건 수정",
+                                            value = "{\n  \"success\": true,\n  \"message\": \"포인트 적립 조건이 등록/수정되었습니다.\",\n  \"data\": 1\n}"
+                                    )
+                            }
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "잘못된 요청",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseDto.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "필수 필드 누락",
+                                            value = "{\n  \"success\": false,\n  \"message\": \"적립 조건 타입은 필수입니다\",\n  \"data\": null\n}"
+                                    ),
+                                    @ExampleObject(
+                                            name = "포인트 양 유효성 검증 실패",
+                                            value = "{\n  \"success\": false,\n  \"message\": \"적립 포인트는 0 이상이어야 합니다\",\n  \"data\": null\n}"
+                                    )
+                            }
+                    )
+            )
     })
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = CreatePointEarnConditionRequestDto.class),
+                    examples = {
+                            @ExampleObject(
+                                    name = "리뷰 포인트 조건 생성",
+                                    value = "{\n  \"conditionType\": \"REVIEW_CREATE\",\n  \"pointAmount\": 100\n}"
+                            ),
+                            @ExampleObject(
+                                    name = "사진 리뷰 포인트 조건 생성",
+                                    value = "{\n  \"conditionType\": \"REVIEW_WITH_PHOTO\",\n  \"pointAmount\": 200\n}"
+                            ),
+                            @ExampleObject(
+                                    name = "방문 포인트 조건 수정",
+                                    value = "{\n  \"conditionType\": \"PLACE_VISIT\",\n  \"pointAmount\": 500\n}"
+                            )
+                    }
+            )
+    )
     public ResponseEntity<ApiResponseDto<Long>> createOrUpdatePointEarnCondition(
             @Valid @RequestBody CreatePointEarnConditionRequestDto request) {
 

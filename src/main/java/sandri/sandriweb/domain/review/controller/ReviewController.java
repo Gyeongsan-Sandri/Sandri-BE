@@ -205,8 +205,9 @@ public class ReviewController {
 
     @PostMapping(value = "/api/places/{placeId}/reviews", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "리뷰 작성",
-               description = "Swagger 폼에서 별점, 리뷰 내용, 사진 URL(order 포함)을 입력하면 리뷰를 생성합니다." +
-                             "사진은 `/api/me/files`로 Presigned URL을 먼저 발급받아 업로드한 뒤 finalUrl을 사용하세요.")
+               description = "Swagger 폼에서 별점, 리뷰 내용, 사진 URL(order 포함)을 입력하면 리뷰를 생성합니다. " +
+                             "사진은 `/api/me/files`로 Presigned URL을 먼저 발급받아 업로드한 뒤 finalUrl을 사용하세요. " +
+                             "리뷰 작성 시 포인트가 자동으로 적립됩니다 (사진 포함: 사진 리뷰 포인트, 사진 없음: 리뷰 포인트. 현재는 구분 안 함).")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "리뷰 작성 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),

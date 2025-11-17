@@ -10,18 +10,26 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.entity.PlacePhoto;
+import sandri.sandriweb.domain.place.repository.PlacePhotoRepository;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 import sandri.sandriweb.domain.point.enums.ConditionType;
 import sandri.sandriweb.domain.point.service.PointService;
 import sandri.sandriweb.domain.review.repository.PlaceReviewRepository;
 import sandri.sandriweb.domain.user.entity.User;
+import sandri.sandriweb.domain.route.entity.Route;
+import sandri.sandriweb.domain.route.entity.RouteLocation;
+import sandri.sandriweb.domain.route.repository.RouteLocationRepository;
+import sandri.sandriweb.domain.route.repository.RouteRepository;
+import sandri.sandriweb.domain.visitHistory.dto.TodayRoutePlaceDto;
 import sandri.sandriweb.domain.visitHistory.dto.UserVisitHistoryDto;
 import sandri.sandriweb.domain.visitHistory.dto.VisitPlaceResponseDto;
 import sandri.sandriweb.domain.visitHistory.entity.mapping.UserPlaceHistory;
 import sandri.sandriweb.domain.visitHistory.repository.UserPlaceHistoryRepository;
 
-import java.util.Comparator;
+import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -33,8 +41,11 @@ public class VisitHistoryService {
 
     private final UserPlaceHistoryRepository userPlaceHistoryRepository;
     private final PlaceRepository placeRepository;
+    private final PlacePhotoRepository placePhotoRepository;
     private final PlaceReviewRepository placeReviewRepository;
     private final PointService pointService;
+    private final RouteRepository routeRepository;
+    private final RouteLocationRepository routeLocationRepository;
     
     private static final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
     private static final double VISIT_DISTANCE_THRESHOLD_METERS = 1000.0; // 1km
@@ -213,5 +224,130 @@ public class VisitHistoryService {
 
         // 거리 계산 (미터)
         return R * c;
+    }
+
+    /**
+     * 오늘 날짜에 해당하는 루트의 장소 목록 조회
+     * 로그인한 사용자가 참여한 루트 중 오늘 날짜에 해당하는 장소들을 조회합니다.
+     * N+1 문제 해결: Place 일괄 조회 및 사진 URL 배치 조회 사용
+     * 
+     * @param user 사용자 엔티티 (Controller에서 전달)
+     * @return 오늘 날짜에 해당하는 장소 목록 (장소 DTO, 총 장소 개수, 방문 순서 포함)
+     */
+    public List<TodayRoutePlaceDto> getTodayRoutePlaces(User user) {
+        // 사용자 검증
+        if (user == null) {
+            throw new RuntimeException("사용자 정보가 없습니다");
+        }
+
+        LocalDate today = LocalDate.now();
+        log.info("오늘 일정 장소 조회: userId={}, today={}", user.getId(), today);
+
+        // 1. 사용자가 참여한 루트 중 오늘 날짜에 해당하는 루트 조회
+        List<Route> todayRoutes = routeRepository.findTodayRoutesByUserId(user.getId(), today);
+
+        if (todayRoutes.isEmpty()) {
+            log.info("오늘 날짜에 해당하는 루트가 없습니다: userId={}", user.getId());
+            return List.of();
+        }
+
+        // 2. 모든 루트의 오늘 날짜 장소 목록 수집
+        List<RouteLocation> allTodayLocations = new java.util.ArrayList<>();
+        Map<RouteLocation, Integer> locationToTotalCountMap = new HashMap<>();
+        
+        for (Route route : todayRoutes) {
+            // 오늘 날짜가 루트의 몇 번째 날인지 계산 (1부터 시작)
+            long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(route.getStartDate(), today);
+            int todayDayNumber = (int) daysBetween + 1;
+
+            // 해당 dayNumber의 장소 목록 조회
+            List<RouteLocation> todayLocations = routeLocationRepository
+                    .findByRouteAndDayNumberOrderByDisplayOrderAsc(route, todayDayNumber);
+
+            if (!todayLocations.isEmpty()) {
+                // 루트의 총 장소 개수
+                int totalPlaceCount = route.getLocations().size();
+                
+                // 각 장소에 총 개수 매핑
+                for (RouteLocation location : todayLocations) {
+                    locationToTotalCountMap.put(location, totalPlaceCount);
+                }
+                
+                allTodayLocations.addAll(todayLocations);
+            }
+        }
+
+        if (allTodayLocations.isEmpty()) {
+            return List.of();
+        }
+
+        // 3. 모든 RouteLocation의 name을 수집하여 Place 일괄 조회 (N+1 문제 해결)
+        Set<String> placeNames = allTodayLocations.stream()
+                .map(RouteLocation::getName)
+                .collect(Collectors.toSet());
+
+        // Place 일괄 조회 (N+1 문제 해결)
+        List<Place> places = placeRepository.findByNameIn(placeNames);
+        
+        // Place 이름으로 매핑 (name -> Place)
+        Map<String, Place> placeByNameMap = places.stream()
+                .collect(Collectors.toMap(Place::getName, place -> place, (existing, replacement) -> existing));
+
+        // 4. Place ID 목록 추출하여 사진 URL 배치 조회 (N+1 문제 해결)
+        List<Long> placeIds = placeByNameMap.values().stream()
+                .map(Place::getId)
+                .collect(Collectors.toList());
+
+        Map<Long, String> photoUrlByPlaceId = getPhotoUrlByPlaceIds(placeIds);
+
+        // 5. Place 이름으로 사진 URL 매핑 (name -> photoUrl)
+        Map<String, String> photoUrlByNameMap = placeByNameMap.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> photoUrlByPlaceId.getOrDefault(entry.getValue().getId(), null)
+                ));
+
+        // 6. DTO 변환
+        return allTodayLocations.stream()
+                .map(location -> {
+                    String placeName = location.getName();
+                    String thumbnail = photoUrlByNameMap.getOrDefault(placeName, null);
+
+                    // 장소 정보 생성
+                    TodayRoutePlaceDto.PlaceInfo placeInfo = TodayRoutePlaceDto.PlaceInfo.builder()
+                            .thumbnail(thumbnail)
+                            .placeName(placeName)
+                            .address(location.getAddress())
+                            .build();
+
+                    return TodayRoutePlaceDto.builder()
+                            .placeInfo(placeInfo)
+                            .totalPlaceCount(locationToTotalCountMap.get(location))
+                            .visitOrder(location.getDisplayOrder())
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 여러 장소의 첫 번째 사진 URL을 조회하여 Place ID별로 매핑
+     * N+1 문제 방지를 위해 배치 조회 사용 (PlaceService 패턴 참고)
+     * @param placeIds 장소 ID 목록
+     * @return Place ID를 키로, 사진 URL을 값으로 하는 Map
+     */
+    private Map<Long, String> getPhotoUrlByPlaceIds(List<Long> placeIds) {
+        if (placeIds == null || placeIds.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        // 배치 조회로 각 장소당 첫 번째 사진만 조회 (N+1 문제 방지)
+        List<Object[]> photoResults = placePhotoRepository.findFirstPhotoUrlByPlaceIdIn(placeIds);
+
+        return photoResults.stream()
+                .collect(Collectors.toMap(
+                        result -> ((Number) result[0]).longValue(), // place_id
+                        result -> (String) result[1],  // photo_url
+                        (existing, replacement) -> existing // 중복 시 기존 값 유지
+                ));
     }
 }
