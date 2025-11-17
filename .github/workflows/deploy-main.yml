@@ -14,10 +14,10 @@ jobs:
 
     - name: Prepare SSH key
       run: |
-        echo "$EC2_KEY" > key.pem
+        echo "$EC2_KEY_B64" | base64 --decode > key.pem
         chmod 600 key.pem
       env:
-        EC2_KEY: ${{ secrets.EC2_KEY }}
+        EC2_KEY_B64: ${{ secrets.EC2_KEY_B64 }}
 
     - name: Deploy to EC2
       run: |
@@ -25,12 +25,21 @@ jobs:
           set -e
           cd ~/Sandri-BE
 
-          echo "📌 Pulling latest source..."
+          echo " Pulling latest source..."
           git pull origin main
 
           echo " Building application..."
           ./gradlew clean build -x test
 
-          echo "🛑 Stopping previous app if running..."
-          pids=$(pgrep -f "Sandri-BE")
-          i
+          echo " Stopping previous app if running..."
+          pids=$(pgrep -f "Sandri-Web-0.0.1-SNAPSHOT.jar")
+          if [ -n "$pids" ]; then
+            sudo kill -9 $pids
+          fi
+
+          echo "🚀 Starting application..."
+          nohup java -jar build/libs/Sandri-Web-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
+
+          echo "🎉 Deploy completed!"
+          echo "📌 To view logs manually: tail -f ~/Sandri-BE/app.log"
+        EOF
