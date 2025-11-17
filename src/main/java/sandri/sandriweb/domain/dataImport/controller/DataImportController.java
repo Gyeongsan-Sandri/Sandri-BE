@@ -33,6 +33,17 @@ public class DataImportController {
             String result = dataImportService.importPlacesFromExternalApi();
             return ResponseEntity.ok(ApiResponseDto.success(result));
 
+        } catch (RuntimeException e) {
+            // 공공 API 호출 실패 등 명시적인 오류
+            String errorMessage = e.getMessage();
+            if (errorMessage != null && errorMessage.contains("공공 API 호출 실패")) {
+                log.error("공공 API 호출 실패: {}", errorMessage);
+                return ResponseEntity.badRequest()
+                        .body(ApiResponseDto.error(errorMessage));
+            }
+            log.error("데이터 임포트 실패: {}", errorMessage);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("데이터 임포트 중 오류가 발생했습니다: " + errorMessage));
         } catch (Exception e) {
             log.error("장소 데이터 임포트 실패", e);
             return ResponseEntity.badRequest()
