@@ -42,6 +42,9 @@ public class RouteLocation {
     @Column(length = 500)
     private String description;
     
+    @Column(length = 1000)
+    private String memo;
+    
     @Column(nullable = false)
     private Integer displayOrder;
     
@@ -55,6 +58,10 @@ public class RouteLocation {
     
     public void updateOrder(Integer displayOrder) {
         this.displayOrder = displayOrder;
+    }
+    
+    public void updateMemo(String memo) {
+        this.memo = memo;
     }
 }
 

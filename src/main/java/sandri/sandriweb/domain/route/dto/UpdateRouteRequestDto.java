@@ -21,6 +21,8 @@ public class UpdateRouteRequestDto {
     private LocalDate endDate;
     
     private Boolean isPublic;
+
+    private String imageUrl;
     
     private List<LocationDto> locations;
     
@@ -37,6 +39,7 @@ public class UpdateRouteRequestDto {
         private Double longitude;
         private String description;
         private Integer displayOrder;
+        private String memo;
     }
 }
 
