@@ -21,15 +21,13 @@ import sandri.sandriweb.domain.place.enums.Category;
 import sandri.sandriweb.domain.place.enums.PlaceCategory;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class DataImportService {
+public class GBGSDataImportService {
 
     private final PlaceRepository placeRepository;
     private final GooglePlaceService googlePlaceService;

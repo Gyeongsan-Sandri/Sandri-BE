@@ -8,7 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import sandri.sandriweb.domain.dataImport.service.DataImportService;
+import sandri.sandriweb.domain.dataImport.service.GBGSDataImportService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 
 @RestController
@@ -18,7 +18,7 @@ import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 @Tag(name = "데이터 임포트", description = "외부 API 데이터 임포트 관련 API (관리자 전용)")
 public class DataImportController {
 
-    private final DataImportService dataImportService;
+    private final GBGSDataImportService GBGSDataImportService;
 
     @PostMapping("/gbgs")
     @Operation(summary = "경산시 장소 데이터 임포트",
@@ -30,7 +30,7 @@ public class DataImportController {
         log.info("장소 데이터 임포트 요청");
 
         try {
-            String result = dataImportService.importPlacesFromExternalApi();
+            String result = GBGSDataImportService.importPlacesFromExternalApi();
             return ResponseEntity.ok(ApiResponseDto.success(result));
 
         } catch (Exception e) {
