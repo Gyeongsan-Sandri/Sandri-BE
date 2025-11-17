@@ -18,7 +18,9 @@ import java.util.List;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-@Table(name = "places")
+@Table(name = "places", uniqueConstraints = {
+    @UniqueConstraint(name = "uc_place_name_address", columnNames = {"name", "address"})
+})
 public class Place extends BaseEntity {
 
     @Id
@@ -26,7 +28,7 @@ public class Place extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "name", nullable = false, unique = true)
+    @Column(name = "name", nullable = false)
     private String name;
 
     @Column(name = "address")

@@ -205,10 +205,13 @@ public class CsvImportService {
                         : csvData.getJibunAddress();
             }
 
-            // 요약 정보
+            // 요약 정보 (Google 우선, 없으면 CSV의 상권업종소분류명)
             String summary = null;
             if (googleCandidate.getEditorialSummary() != null) {
                 summary = googleCandidate.getEditorialSummary().getOverview();
+            }
+            if (summary == null || summary.isEmpty()) {
+                summary = csvData.getIndustryName();  // 상권업종소분류명
             }
 
             // 상세 정보 (업종명)
@@ -217,6 +220,12 @@ public class CsvImportService {
             // 카테고리 매핑 (업종코드 기반)
             PlaceCategory group = mapIndustryCodeToPlaceCategory(csvData.getIndustryCode());
             Category category = mapIndustryCodeToCategory(csvData.getIndustryCode());
+
+            // 매핑되지 않은 업종코드는 스킵
+            if (group == null || category == null) {
+                log.info("업종코드 매핑 안 됨, 스킵: code={}, name={}", csvData.getIndustryCode(), name);
+                return null;
+            }
 
             // Place 엔티티 생성
             Place place = Place.builder()
@@ -291,6 +300,9 @@ public class CsvImportService {
                     ? csvData.getRoadAddress()
                     : csvData.getJibunAddress();
 
+            // 요약 정보 (상권업종소분류명)
+            String summary = csvData.getIndustryName();
+
             // 상세 정보 (업종명)
             String information = csvData.getIndustryName();
 
@@ -298,12 +310,18 @@ public class CsvImportService {
             PlaceCategory group = mapIndustryCodeToPlaceCategory(csvData.getIndustryCode());
             Category category = mapIndustryCodeToCategory(csvData.getIndustryCode());
 
+            // 매핑되지 않은 업종코드는 스킵
+            if (group == null || category == null) {
+                log.info("업종코드 매핑 안 됨, 스킵: code={}, name={}", csvData.getIndustryCode(), fullName);
+                return null;
+            }
+
             // Place 엔티티 생성
             Place place = Place.builder()
                     .name(fullName)
                     .address(address)
                     .location(location)
-                    .summery(null)  // CSV에는 요약 정보 없음
+                    .summery(summary)  // 상권업종소분류명
                     .information(information)
                     .group(group)
                     .category(category)
@@ -324,10 +342,11 @@ public class CsvImportService {
 
     /**
      * 업종코드를 PlaceCategory로 매핑
+     * @return PlaceCategory 또는 null (매핑되지 않은 코드)
      */
     private PlaceCategory mapIndustryCodeToPlaceCategory(String industryCode) {
         if (industryCode == null || industryCode.isEmpty()) {
-            return PlaceCategory.관광지;
+            return null;  // 업종코드 없음 → 스킵
         }
 
         // 필요시설
@@ -374,15 +393,16 @@ public class CsvImportService {
             return PlaceCategory.숙박시설;
         }
 
-        return PlaceCategory.관광지;
+        return null;  // 매핑되지 않은 업종코드 → 스킵
     }
 
     /**
      * 업종코드를 Category로 매핑
+     * @return Category 또는 null (매핑되지 않은 코드)
      */
     private Category mapIndustryCodeToCategory(String industryCode) {
         if (industryCode == null || industryCode.isEmpty()) {
-            return Category.문화_체험;
+            return null;  // 업종코드 없음 → 스킵
         }
 
         // I로 시작하면 음식 관련
