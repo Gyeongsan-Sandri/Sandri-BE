@@ -33,7 +33,7 @@ public class PointController {
 
     private final PointService pointService;
 
-    @GetMapping("/histories")
+    @GetMapping("/history")
     @Operation(summary = "포인트 히스토리 목록 조회",
                description = "마이페이지: 포인트 내역 조회 페이지에서 호출합니다." +
                              "로그인한 사용자의 포인트 적립/사용 내역 목록을 조회합니다. " +

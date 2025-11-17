@@ -16,11 +16,4 @@ public interface PointEarnConditionRepository extends JpaRepository<PointEarnCon
      * @return 적립 조건 (Optional)
      */
     Optional<PointEarnCondition> findByConditionType(ConditionType conditionType);
-
-    /**
-     * 조건 타입 존재 여부 확인
-     * @param conditionType 조건 타입
-     * @return 존재 여부
-     */
-    boolean existsByConditionType(ConditionType conditionType);
 }

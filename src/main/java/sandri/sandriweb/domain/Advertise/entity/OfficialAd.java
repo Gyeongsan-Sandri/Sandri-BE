@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Table(name = "official_ads")
-public class OfficialAd extends BaseEntity {
+public class OfficialAd extends BaseEntity implements Ad {
 
     @Id
     @Column(name = "official_ad_id")

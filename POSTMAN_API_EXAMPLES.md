@@ -684,7 +684,7 @@ DELETE http://localhost:8080/api/me/reviews/1
 
 ### 4.1 장소 방문 확인 및 기록
 ```
-POST http://localhost:8080/api/me/today/places/1
+POST http://localhost:8080/api/me/visits/places/1
 Content-Type: application/json
 
 {
@@ -738,11 +738,12 @@ Content-Type: application/json
 
 ### 4.2 오늘 일정 장소 조회
 ```
-GET http://localhost:8080/api/me/today/places
+GET http://localhost:8080/api/me/visits/places
 ```
 **인증 필요**: 로그인 필수
 
 **설명:**
+- 홈 화면: 오늘 일정에서 호출합니다.
 - 로그인한 사용자가 참여한 루트 중 오늘 날짜에 해당하는 장소 목록을 조회합니다.
 - 각 장소는 썸네일, 장소 이름, 한글 주소를 포함하며, 여행의 총 장소 개수와 해당 여행지의 방문 순서도 함께 반환됩니다.
 
@@ -769,6 +770,50 @@ GET http://localhost:8080/api/me/today/places
       },
       "totalPlaceCount": 5,
       "visitOrder": 2
+    }
+  ]
+}
+```
+
+**에러 응답:**
+- `401 Unauthorized`: 인증 필요
+- `404 Not Found`: 사용자를 찾을 수 없음
+
+### 4.3 방문 기록 목록 조회
+```
+GET http://localhost:8080/api/me/visits/history
+```
+**인증 필요**: 로그인 필수
+
+**설명:**
+- 마이페이지: 방문 기록(내 여행) 페이지에서 호출합니다.
+- 로그인한 사용자의 모든 방문 기록을 조회합니다.
+- 각 방문 기록은 장소 정보(장소 ID, 장소 이름, 첫 번째 사진 URL), 방문 날짜, 방문 요일, 리뷰 작성 여부를 포함합니다.
+- 최신순으로 정렬되어 반환됩니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "visitHistoryId": 1,
+      "placeId": 1,
+      "placeName": "경복궁",
+      "firstPhotoUrl": "https://s3.../photo.jpg",
+      "visitedAt": "2024-11-05",
+      "dayOfWeek": "화",
+      "hasReview": true
+    },
+    {
+      "visitHistoryId": 2,
+      "placeId": 2,
+      "placeName": "경주 석굴암",
+      "firstPhotoUrl": "https://s3.../photo2.jpg",
+      "visitedAt": "2024-11-04",
+      "dayOfWeek": "월",
+      "hasReview": false
     }
   ]
 }
@@ -1963,11 +2008,12 @@ if (pm.response.code === 200) {
 
 ### 시나리오 3: 방문 기록 및 포인트
 1. `POST /api/auth/login` - 로그인
-2. `GET /api/me/today/places` - 오늘 일정 장소 조회
-3. `POST /api/me/today/places/1` - 장소 방문 확인 및 기록 (GPS 위치 전송)
-4. `GET /api/me/points/histories?type=ALL` - 포인트 히스토리 전체 조회
-5. `GET /api/me/points/histories?type=EARN` - 포인트 적립 내역만 조회
-6. `GET /api/me/points/expiring-points` - 소멸 예정 포인트 조회
+2. `GET /api/me/visits/places` - 오늘 일정 장소 조회
+3. `POST /api/me/visits/places/1` - 장소 방문 확인 및 기록 (GPS 위치 전송)
+4. `GET /api/me/visits/history` - 방문 기록 목록 조회 (리뷰 작성 여부 포함)
+5. `GET /api/me/points/histories?type=ALL` - 포인트 히스토리 전체 조회
+6. `GET /api/me/points/histories?type=EARN` - 포인트 적립 내역만 조회
+7. `GET /api/me/points/expiring-points` - 소멸 예정 포인트 조회
 
 ### 시나리오 4: 매거진 조회 및 좋아요
 1. `GET /api/magazines?size=5` - 매거진 목록 조회 (첫 페이지)

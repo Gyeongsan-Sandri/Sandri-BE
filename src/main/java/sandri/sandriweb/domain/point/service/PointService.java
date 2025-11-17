@@ -6,7 +6,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sandri.sandriweb.domain.point.dto.ExpiringPointsResponseDto;
 import sandri.sandriweb.domain.point.dto.PointHistoryDto;
-import sandri.sandriweb.domain.point.dto.PointHistoryResponseDto;
 import sandri.sandriweb.domain.point.entity.PointEarnCondition;
 import sandri.sandriweb.domain.point.entity.PointHistory;
 import sandri.sandriweb.domain.point.enums.ConditionType;
@@ -91,38 +90,6 @@ public class PointService {
                 user.getId(), type, historyDtos.size());
 
         return historyDtos;
-    }
-
-    /**
-     * 포인트 히스토리 목록과 소멸 예정 포인트를 한 번에 조회 (중복 쿼리 방지)
-     * @param user 사용자 엔티티 (Controller에서 전달)
-     * @param type 조회 타입 (ALL: 전체, EARN: 적립만, USE: 사용만)
-     * @return 포인트 히스토리 응답 DTO (히스토리 목록 + 소멸 예정 포인트)
-     */
-    public PointHistoryResponseDto getUserPointHistoryWithExpiring(User user, PointHistoryType type) {
-        // 사용자 검증
-        if (user == null) {
-            throw new RuntimeException("사용자 정보가 없습니다");
-        }
-
-        log.info("포인트 히스토리 및 소멸 예정 포인트 조회: userId={}, type={}", user.getId(), type);
-
-        // 사용자의 모든 포인트 히스토리 조회 (최신순) - 한 번만 조회
-        List<PointHistory> histories = pointHistoryRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
-
-        // DTO 리스트로 변환 및 타입별 필터링
-        List<PointHistoryDto> historyDtos = convertToHistoryDtos(histories, type);
-
-        // 소멸 예정 포인트 계산 (동일한 histories 재사용)
-        Long expiringPoints = calculateExpiringPointsWithin7Days(histories);
-
-        log.info("포인트 히스토리 및 소멸 예정 포인트 조회 완료: userId={}, type={}, historyCount={}, expiringPoints={}",
-                user.getId(), type, historyDtos.size(), expiringPoints);
-
-        return PointHistoryResponseDto.builder()
-                .expiringPointsWithin7Days(expiringPoints)
-                .histories(historyDtos)
-                .build();
     }
 
     /**

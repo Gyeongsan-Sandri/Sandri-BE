@@ -18,6 +18,7 @@ import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.domain.visitHistory.dto.TodayRoutePlaceDto;
+import sandri.sandriweb.domain.visitHistory.dto.UserVisitHistoryDto;
 import sandri.sandriweb.domain.visitHistory.dto.VisitPlaceRequestDto;
 import sandri.sandriweb.domain.visitHistory.dto.VisitPlaceResponseDto;
 import sandri.sandriweb.domain.visitHistory.service.VisitHistoryService;
@@ -25,7 +26,7 @@ import sandri.sandriweb.domain.visitHistory.service.VisitHistoryService;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/me/today")
+@RequestMapping("/api/me/visits")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "방문 기록", description = "장소 방문 기록 관련 API")
@@ -147,6 +148,57 @@ public class VisitHistoryController {
             log.error("오늘 일정 장소 조회 중 오류 발생: ", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponseDto.error("오늘 일정 장소 조회 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/history")
+    @Operation(summary = "방문 기록 목록 조회",
+               description = "마이페이지: 방문 기록(내 여행) 페이지에서 호출합니다. " +
+                           "로그인한 사용자의 모든 방문 기록을 조회합니다. " +
+                           "각 방문 기록은 장소 정보(장소 ID, 장소 이름, 첫 번째 사진 URL), 방문 날짜, 방문 요일, 리뷰 작성 여부를 포함합니다." +
+                           "최신순으로 정렬되어 반환됩니다.")
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            schema = @Schema(implementation = ApiResponseDto.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "조회 성공",
+                                            value = "{\n  \"success\": true,\n  \"message\": \"성공\",\n  \"data\": [\n    {\n      \"visitHistoryId\": 1,\n      \"placeId\": 1,\n      \"placeName\": \"경복궁\",\n      \"firstPhotoUrl\": \"https://s3.../photo.jpg\",\n      \"visitedAt\": \"2024-11-05\",\n      \"dayOfWeek\": \"화\",\n      \"hasReview\": true\n    },\n    {\n      \"visitHistoryId\": 2,\n      \"placeId\": 2,\n      \"placeName\": \"경주 석굴암\",\n      \"firstPhotoUrl\": \"https://s3.../photo2.jpg\",\n      \"visitedAt\": \"2024-11-04\",\n      \"dayOfWeek\": \"월\",\n      \"hasReview\": false\n    }\n  ]\n}"
+                                    )
+                            }
+                    )
+            ),
+            @ApiResponse(responseCode = "401", description = "인증 필요"),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    })
+    public ResponseEntity<ApiResponseDto<List<UserVisitHistoryDto>>> getUserVisitHistory(
+            Authentication authentication) {
+
+        try {
+            // 로그인한 사용자 정보 가져오기
+            String username = authentication.getName();
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+
+            log.info("방문 기록 목록 조회 요청: userId={}", user.getId());
+
+            List<UserVisitHistoryDto> response = visitHistoryService.getUserVisitHistory(user);
+            return ResponseEntity.ok(ApiResponseDto.success(response));
+        } catch (RuntimeException e) {
+            log.error("방문 기록 목록 조회 실패: {}", e.getMessage());
+            if (e.getMessage().contains("찾을 수 없습니다")) {
+                return ResponseEntity.status(404)
+                        .body(ApiResponseDto.error(e.getMessage()));
+            }
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("방문 기록 목록 조회 중 오류 발생: ", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("방문 기록 목록 조회 중 오류가 발생했습니다: " + e.getMessage()));
         }
     }
 }
