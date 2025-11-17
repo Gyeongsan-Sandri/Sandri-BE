@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import sandri.sandriweb.domain.route.entity.Route;
 import sandri.sandriweb.domain.user.entity.User;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,5 +39,18 @@ public interface RouteRepository extends JpaRepository<Route, Long> {
            "AND LOWER(r.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "ORDER BY r.createdAt DESC")
     Page<Route> searchByKeyword(@Param("keyword") String keyword, Pageable pageable);
+
+    /**
+     * 사용자가 참여한 루트 중 오늘 날짜에 해당하는 루트 조회
+     * @param userId 사용자 ID
+     * @param today 오늘 날짜
+     * @return 오늘 날짜에 해당하는 루트 목록
+     */
+    @Query("SELECT DISTINCT r FROM Route r " +
+           "LEFT JOIN r.participants p " +
+           "WHERE (r.creator.id = :userId OR p.user.id = :userId) " +
+           "AND r.startDate <= :today " +
+           "AND r.endDate >= :today")
+    List<Route> findTodayRoutesByUserId(@Param("userId") Long userId, @Param("today") LocalDate today);
 }
 

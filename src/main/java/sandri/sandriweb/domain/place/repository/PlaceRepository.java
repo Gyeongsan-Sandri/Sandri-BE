@@ -23,6 +23,14 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
      */
     java.util.Optional<Place> findByName(String name);
 
+    /**
+     * 여러 이름으로 장소 일괄 조회 (N+1 문제 방지)
+     * @param names 장소 이름 목록
+     * @return 이름을 키로 하는 장소 Map
+     */
+    @Query("SELECT p FROM Place p WHERE p.name IN :names AND p.enabled = true")
+    List<Place> findByNameIn(@Param("names") java.util.Set<String> names);
+
     // 근처 장소 조회 (반경 내)
     // 참고: ST_Distance_Sphere는 MySQL/MariaDB용 함수입니다.
     // PostgreSQL을 사용하는 경우 ST_Distance와 ST_Transform을 사용하거나,

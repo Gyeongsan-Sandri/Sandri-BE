@@ -122,5 +122,14 @@ public interface PlaceReviewRepository extends JpaRepository<PlaceReview, Long> 
      */
     @Query("SELECT COUNT(r) > 0 FROM PlaceReview r WHERE r.user.id = :userId AND r.place.id = :placeId AND r.enabled = true")
     boolean existsByUserIdAndPlaceId(@Param("userId") Long userId, @Param("placeId") Long placeId);
+
+    /**
+     * 특정 사용자가 여러 장소에 작성한 활성화된 리뷰가 있는 장소 ID 목록 조회 (N+1 문제 해결)
+     * @param userId 사용자 ID
+     * @param placeIds 장소 ID 목록
+     * @return 리뷰가 있는 장소 ID Set
+     */
+    @Query("SELECT r.place.id FROM PlaceReview r WHERE r.user.id = :userId AND r.place.id IN :placeIds AND r.enabled = true")
+    java.util.Set<Long> findPlaceIdsWithReviewByUserIdAndPlaceIds(@Param("userId") Long userId, @Param("placeIds") java.util.Set<Long> placeIds);
 }
 

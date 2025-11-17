@@ -11,6 +11,8 @@ import sandri.sandriweb.domain.review.dto.CursorResponseDto;
 import sandri.sandriweb.domain.review.dto.ReviewDto;
 import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
+import sandri.sandriweb.domain.point.enums.ConditionType;
+import sandri.sandriweb.domain.point.service.PointService;
 import sandri.sandriweb.domain.review.dto.CreateReviewRequestDto;
 import sandri.sandriweb.domain.review.dto.UpdateReviewRequestDto;
 import sandri.sandriweb.domain.review.entity.PlaceReview;
@@ -31,6 +33,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class ReviewService {
 
     private final PlaceReviewRepository placeReviewRepository;
@@ -38,6 +41,7 @@ public class ReviewService {
     private final PlaceRepository placeRepository;
     private final UserRepository userRepository;
     private final S3Service s3Service;
+    private final PointService pointService;
 
     /**
      * 리뷰 작성
@@ -76,7 +80,9 @@ public class ReviewService {
 
         // 사진이 있는 경우 PlaceReviewPhoto 저장
         List<PlaceReviewPhoto> photos = new ArrayList<>();
-        if (request.getPhotos() != null && !request.getPhotos().isEmpty()) {
+        boolean hasPhotos = request.getPhotos() != null && !request.getPhotos().isEmpty();
+
+        if (hasPhotos) {
             photos = request.getPhotos().stream()
                     .map(photoInfo -> PlaceReviewPhoto.builder()
                             .placeReview(savedReview)
@@ -89,7 +95,19 @@ public class ReviewService {
             photos = placeReviewPhotoRepository.saveAll(photos);
         }
 
-        log.info("리뷰 작성 완료: reviewId={}, userId={}, placeId={}", savedReview.getId(), user.getId(), placeId);
+        log.info("리뷰 작성 완료: reviewId={}, userId={}, placeId={}, hasPhotos={}",
+                savedReview.getId(), user.getId(), placeId, hasPhotos);
+
+        // 포인트 적립 처리
+        try {
+            // 사진 포함 여부에 따라 다른 조건 타입 사용
+            ConditionType conditionType = hasPhotos ? ConditionType.REVIEW_WITH_PHOTO : ConditionType.REVIEW_CREATE;
+            pointService.earnPoints(user, conditionType);
+        } catch (Exception e) {
+            log.error("리뷰 작성 포인트 적립 중 오류 발생: userId={}, reviewId={}, error={}",
+                    user.getId(), savedReview.getId(), e.getMessage(), e);
+            // 포인트 적립 실패해도 리뷰 작성은 유지
+        }
 
         // 리뷰 ID만 반환
         return savedReview.getId();
@@ -218,7 +236,6 @@ public class ReviewService {
      * @param sort 정렬 기준 (latest: 최신순, rating_high: 평점 높은 순, rating_low: 평점 낮은 순)
      * @return 커서 기반 페이징된 리뷰 목록
      */
-    @Transactional(readOnly = true)
     public CursorResponseDto<ReviewDto> getReviews(Long placeId, Long lastReviewId, int size, String sort) {
         // size + 1개를 가져와서 다음 페이지 존재 여부 확인
         Pageable pageable = PageRequest.of(0, size + 1);
@@ -252,7 +269,6 @@ public class ReviewService {
      * @param size 페이지 크기
      * @return 커서 기반 페이징된 리뷰 사진 정보 리스트 (order 포함)
      */
-    @Transactional(readOnly = true)
     public CursorResponseDto<ReviewDto.PhotoDto> getReviewPhotos(Long placeId, Long lastPhotoId, int size) {
         // size + 1개를 가져와서 다음 페이지 존재 여부 확인
         Pageable pageable = PageRequest.of(0, size + 1);
@@ -297,7 +313,6 @@ public class ReviewService {
      * @param placeId 관광지 ID
      * @return 평균 평점
      */
-    @Transactional(readOnly = true)
     public Double getAverageRating(Long placeId) {
         Double averageRating = placeReviewRepository.findAverageRatingByPlaceId(placeId);
         return averageRating != null ? averageRating : 0.0;
@@ -309,7 +324,6 @@ public class ReviewService {
      * @param reviewId 리뷰 ID
      * @return 리뷰 DTO
      */
-    @Transactional(readOnly = true)
     public ReviewDto getReviewById(Long userId, Long reviewId) {
         // 리뷰 조회 및 소유자 확인 (사진과 사용자 정보 포함)
         PlaceReview review = placeReviewRepository.findByIdWithPhotos(reviewId)
@@ -330,7 +344,6 @@ public class ReviewService {
      * @param size 페이지 크기
      * @return 커서 기반 페이징된 리뷰 목록
      */
-    @Transactional(readOnly = true)
     public CursorResponseDto<ReviewDto> getMyReviews(Long userId, Long lastReviewId, int size) {
         // size + 1개를 가져와서 다음 페이지 존재 여부 확인
         Pageable pageable = PageRequest.of(0, size + 1);
@@ -346,7 +359,6 @@ public class ReviewService {
      * 관리자용 전체 리뷰 목록 조회 (reviewId와 content만 반환)
      * @return 전체 리뷰 목록 (reviewId, content)
      */
-    @Transactional(readOnly = true)
     public List<ReviewListDto> getAllReviews() {
         List<PlaceReview> reviews = placeReviewRepository.findAll();
         

@@ -60,12 +60,30 @@ public class DataImportService {
         log.info("데이터 임포트 시작");
 
         try {
+            // 공공 API 호출 가능 여부 확인 (첫 번째 카테고리로 테스트)
+            int firstCode = CATEGORY_CODES[0];
+            GbgsTourApiResponse testResponse = fetchExternalApiData(firstCode, 1, NUM_OF_ROWS);
+            
+            if (testResponse == null) {
+                String errorMsg = String.format("공공 API 호출 실패: 카테고리 코드 %d의 첫 페이지 조회에 실패했습니다. " +
+                        "API 서버 상태, 네트워크 연결, API 키를 확인해주세요.", firstCode);
+                log.error(errorMsg);
+                throw new RuntimeException(errorMsg);
+            }
+
             // 각 카테고리 코드별로 순회
             for (int code : CATEGORY_CODES) {
                 log.info("카테고리 코드 {} 처리 시작", code);
 
                 // 1단계: 첫 페이지를 조회하여 totalCount 확인
-                GbgsTourApiResponse firstPageResponse = fetchExternalApiData(code, 1, NUM_OF_ROWS);
+                GbgsTourApiResponse firstPageResponse;
+                
+                // 첫 번째 카테고리는 이미 조회했으므로 재사용
+                if (code == firstCode) {
+                    firstPageResponse = testResponse;
+                } else {
+                    firstPageResponse = fetchExternalApiData(code, 1, NUM_OF_ROWS);
+                }
 
                 if (firstPageResponse == null || firstPageResponse.getTotalCount() == null) {
                     log.warn("카테고리 코드 {} 첫 페이지 조회 실패", code);
