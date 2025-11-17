@@ -35,10 +35,10 @@ public class Place extends BaseEntity {
     @Column(name = "location", nullable = false)
     private Point location;
 
-    @Column(name = "summery")
+    @Column(name = "summery", length = 1000)
     private String summery;
 
-    @Column(name = "inform")
+    @Column(name = "inform", length = 2000)
     private String information;
 
     @OneToMany(mappedBy = "place", fetch = FetchType.LAZY, orphanRemoval = true, cascade = CascadeType.ALL)

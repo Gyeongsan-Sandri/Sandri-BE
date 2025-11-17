@@ -34,6 +34,12 @@ google:
     api-key: ${GOOGLE_MAPS_API_KEY:your-pop-google-maps-api-key-here}
     base-url: https://maps.googleapis.com/maps/api
 
+# 외부 API (경산시 관광 서비스)
+external:
+  api:
+    service-key: ${GBGS_API_SERVICE_KEY:your-external-api-service-key-here}
+    base-url: http://apis.data.go.kr/5130000/openapi/GbgsTourService/getTourContentList
+
 # AWS S3
 cloud:
   aws:
