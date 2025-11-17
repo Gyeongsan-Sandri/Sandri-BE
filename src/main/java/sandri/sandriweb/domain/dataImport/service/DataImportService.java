@@ -1,6 +1,7 @@
 package sandri.sandriweb.domain.dataImport.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,7 +11,10 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 import sandri.sandriweb.domain.dataImport.dto.GbgsTourApiResponse;
@@ -21,8 +25,6 @@ import sandri.sandriweb.domain.place.enums.Category;
 import sandri.sandriweb.domain.place.enums.PlaceCategory;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,8 +36,10 @@ public class DataImportService {
     private final PlaceRepository placeRepository;
     private final GooglePlaceService googlePlaceService;
     private final EntityManager entityManager;
+    private final PlatformTransactionManager transactionManager;
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private TransactionTemplate transactionTemplate;
 
     @Value("${external.api.service-key}")
     private String serviceKey;
@@ -47,11 +51,16 @@ public class DataImportService {
     private static final int[] CATEGORY_CODES = {100, 200, 300, 400}; // 음식, 숙박, 관광명소, 문화재/역사
     private static final int NUM_OF_ROWS = 100; // 한 페이지당 조회 개수
 
+    @PostConstruct
+    void initTransactionTemplate() {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
     /**
      * 외부 API에서 데이터를 가져와 Google Place API로 검색 후 DB에 저장
      * @return 처리 결과 메시지
      */
-    @Transactional
     public String importPlacesFromExternalApi() {
         int totalImported = 0;
         int totalFailed = 0;
@@ -136,17 +145,21 @@ public class DataImportService {
 
                                 GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
 
+                                String candidateName = candidate.getName();
+                                if (StringUtils.hasText(candidateName) && placeRepository.existsByName(candidateName)) {
+                                    log.debug("이미 존재하는 장소 (Google API 이름): {}", candidateName);
+                                    totalSkipped++;
+                                    continue;
+                                }
+
                                 // Place 엔티티 생성 및 저장
-                                Place savedPlace = createAndSavePlace(item, candidate, code);
+                                Place savedPlace = savePlaceWithNewTransaction(item, candidate, code);
 
                                 if (savedPlace != null) {
                                     totalImported++;
                                     log.info("장소 저장 성공: {}", item.getTitle());
                                 } else {
                                     totalFailed++;
-                                    // 저장 실패 시 세션 클리어하여 다음 아이템 처리 가능하도록 함
-                                    entityManager.clear();
-                                    log.info("세션 클리어 완료 (저장 실패 후)");
                                 }
                             } else {
                                 log.warn("Google Place API에서 찾을 수 없음: {}", item.getTitle());
@@ -200,6 +213,23 @@ public class DataImportService {
 
         } catch (Exception e) {
             log.error("외부 API 호출 실패: code={}, pageNo={}, error={}", code, pageNo, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    private Place savePlaceWithNewTransaction(GbgsTourApiResponse.TourItem item,
+                                              GooglePlaceResponse.Candidate googleCandidate,
+                                              int categoryCode) {
+        try {
+            return transactionTemplate.execute(status -> createAndSavePlace(item, googleCandidate, categoryCode));
+        } catch (Exception e) {
+            log.error("Place 저장 트랜잭션 실패: itemTitle={}, candidateName={}, error={}",
+                    item.getTitle(),
+                    googleCandidate != null ? googleCandidate.getName() : null,
+                    e.getMessage(),
+                    e);
+            entityManager.clear();
+            log.info("세션 클리어 완료 (저장 실패 트랜잭션)");
             return null;
         }
     }
@@ -285,7 +315,7 @@ public class DataImportService {
 
         } catch (Exception e) {
             log.error("Place 엔티티 생성 실패: name={}, error={}", item.getTitle(), e.getMessage(), e);
-            return null;
+            throw e;
         }
     }
 
