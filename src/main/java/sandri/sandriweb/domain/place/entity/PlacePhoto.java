@@ -18,7 +18,7 @@ public class PlacePhoto extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "photo_url", nullable = false)
+    @Column(name = "photo_url", nullable = false, length = 1000)
     private String photoUrl;
     
     @Column(name = "`order`", nullable = false)
