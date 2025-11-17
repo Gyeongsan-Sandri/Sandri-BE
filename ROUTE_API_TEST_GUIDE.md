@@ -65,7 +65,7 @@ Request Body 예시:
   "description": "서울 한강 공원 산책 코스",
   "startDate": "2025-07-17",
   "endDate": "2025-07-18",
-  "imageUrl": "https://s3.amazonaws.com/your-bucket/routes/route-cover.jpg",
+  "imageUrl": "",
   "isPublic": false,
   "locations": [
     {
@@ -89,6 +89,8 @@ Request Body 예시:
   ]
 }
 ```
+
+**참고**: `imageUrl`을 비워두거나 제공하지 않으면, 첫 번째 장소(반곡지)의 DB 사진이 자동으로 설정됩니다.
 
 Response에서 `id` 값을 확인하세요 (다음 단계에서 사용).
 
@@ -171,6 +173,23 @@ Response 예시:
 ### Step 11: 루트 삭제
 
 **DELETE** `/api/routes/{routeId}`
+
+### Step 12: 장소 메모 저장
+
+**PUT** `/api/routes/{routeId}/locations/{locationId}/memo`
+
+Request Body 예시:
+```json
+{
+  "memo": "1코스에서 사진 찍기"
+}
+```
+
+### Step 13: 장소 메모 삭제
+
+**DELETE** `/api/routes/{routeId}/locations/{locationId}/memo`
+
+> 메모는 루트 상세 조회(`GET /api/routes/{routeId}`) 또는 공유 코드 조회 응답의 `locations[].memo` 필드에서 확인할 수 있습니다.
 
 ## Postman으로 테스트하기
 

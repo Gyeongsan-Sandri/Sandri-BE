@@ -67,6 +67,9 @@ public class CreateRouteRequestDto {
         
         @Schema(description = "표시 순서", example = "0")
         private Integer displayOrder;
+
+        @Schema(description = "장소 메모", example = "반드시 사진 찍기")
+        private String memo;
     }
 }
 

@@ -31,7 +31,8 @@ public class SearchController {
 
     @GetMapping("/places/search")
     @Operation(summary = "장소 검색", 
-               description = "키워드로 장소를 검색합니다. 이름, 주소, 요약 정보에서 검색합니다.")
+               description = "키워드로 장소를 검색합니다. 내부 DB를 우선 검색하고, 결과가 부족하면 Google Places API로 보충합니다. " +
+                           "DB 장소는 placeId가 있어 상세보기/좋아요 가능하며, Google 보충 결과는 placeId가 null입니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "검색 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")

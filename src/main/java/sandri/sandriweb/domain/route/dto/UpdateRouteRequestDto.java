@@ -39,6 +39,7 @@ public class UpdateRouteRequestDto {
         private Double longitude;
         private String description;
         private Integer displayOrder;
+        private String memo;
     }
 }
 

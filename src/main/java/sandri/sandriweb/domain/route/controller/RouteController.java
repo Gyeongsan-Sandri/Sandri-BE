@@ -255,6 +255,67 @@ public class RouteController {
         }
     }
     
+    @PutMapping("/{routeId}/locations/{locationId}/memo")
+    @Operation(summary = "장소 메모 저장", description = "루트 내 특정 장소에 대한 메모를 저장하거나 수정합니다")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "저장 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "루트 또는 장소 없음")
+    })
+    public ResponseEntity<ApiResponseDto<RouteResponseDto.LocationDto>> upsertLocationMemo(
+            @PathVariable Long routeId,
+            @PathVariable Long locationId,
+            @Valid @RequestBody UpdateLocationMemoRequestDto request,
+            Authentication authentication) {
+
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+
+        log.info("장소 메모 저장 요청: 루트ID={}, 장소ID={}, 사용자={}", routeId, locationId, username);
+        ApiResponseDto<RouteResponseDto.LocationDto> response =
+                routeService.upsertLocationMemo(routeId, locationId, request.getMemo(), user);
+
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else if (response.getMessage() != null && response.getMessage().contains("권한")) {
+            return ResponseEntity.status(403).body(response);
+        } else if (response.getMessage() != null && response.getMessage().contains("찾을 수 없습니다")) {
+            return ResponseEntity.status(404).body(response);
+        }
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @DeleteMapping("/{routeId}/locations/{locationId}/memo")
+    @Operation(summary = "장소 메모 삭제", description = "루트 내 특정 장소의 메모를 삭제합니다")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "삭제 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "루트 또는 장소 없음")
+    })
+    public ResponseEntity<ApiResponseDto<RouteResponseDto.LocationDto>> deleteLocationMemo(
+            @PathVariable Long routeId,
+            @PathVariable Long locationId,
+            Authentication authentication) {
+
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+
+        log.info("장소 메모 삭제 요청: 루트ID={}, 장소ID={}, 사용자={}", routeId, locationId, username);
+        ApiResponseDto<RouteResponseDto.LocationDto> response =
+                routeService.deleteLocationMemo(routeId, locationId, user);
+
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else if (response.getMessage() != null && response.getMessage().contains("권한")) {
+            return ResponseEntity.status(403).body(response);
+        } else if (response.getMessage() != null && response.getMessage().contains("찾을 수 없습니다")) {
+            return ResponseEntity.status(404).body(response);
+        }
+        return ResponseEntity.badRequest().body(response);
+    }
+    
     @GetMapping("/{routeId}/share")
     @Operation(summary = "공유 링크 생성", description = "루트의 공유 링크와 QR 코드를 생성합니다")
     @ApiResponses(value = {

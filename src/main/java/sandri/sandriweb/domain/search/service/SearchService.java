@@ -24,6 +24,8 @@ import sandri.sandriweb.domain.search.repository.RecentSearchRepository;
 import sandri.sandriweb.domain.search.repository.SearchLogRepository;
 import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
+import sandri.sandriweb.global.service.GooglePlacesService;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -42,29 +44,76 @@ public class SearchService {
     private final PlacePhotoRepository placePhotoRepository;
     private final UserPlaceRepository userPlaceRepository;
     private final UserRepository userRepository;
+    private final GooglePlacesService googlePlacesService;
+
+    @Value("${google.maps.api-key}")
+    private String googleMapsApiKey;
 
     private static final int MAX_RECENT_SEARCHES = 10;
 
     /**
-     * 장소 검색
+     * 장소 검색 (DB 우선, 결과 부족하면 Google Places로 보충)
      */
     @Transactional
     public PlaceSearchResponseDto searchPlaces(String keyword, String category, int page, int size, Long userId) {
         // 검색 로그 저장
         saveSearchLog(keyword, SearchLog.SearchType.PLACE);
         
+        // 1단계: 내부 DB에서 검색
         Pageable pageable = PageRequest.of(page - 1, size);
         
-        Page<Place> placePage;
+        // 카테고리 문자열을 enum으로 변환
+        Category categoryEnum = null;
         if (category != null && !category.isEmpty()) {
-            // 카테고리 필터 포함 검색
-            placePage = placeRepository.searchByKeywordAndCategory(keyword, category, pageable);
+            categoryEnum = Category.fromDisplayName(category);
+            if (categoryEnum == null) {
+                log.warn("유효하지 않은 카테고리: {}", category);
+            }
+        }
+        
+        Page<Place> placePage;
+        if (categoryEnum != null) {
+            placePage = placeRepository.searchByKeywordAndCategory(keyword, categoryEnum, pageable);
         } else {
-            // 일반 검색
             placePage = placeRepository.searchByKeyword(keyword, pageable);
         }
+        
+        List<Place> dbPlaces = placePage.getContent();
+        log.info("DB 검색 결과: keyword={}, count={}", keyword, dbPlaces.size());
+        
+        // 2단계: DB 결과가 충분하면 그대로 반환
+        if (dbPlaces.size() >= size) {
+            return buildDbResponse(dbPlaces, placePage, page, size);
+        }
+        
+        // 3단계: DB 결과 부족하면 Google Places로 보충
+        int needMore = size - dbPlaces.size();
+        log.info("DB 결과 부족. Google Places에서 {}개 추가 검색: keyword={}", needMore, keyword);
+        
+        List<GooglePlacesService.PlaceSearchResult> googleResults = googlePlacesService.searchPlaces(keyword, "ko", "kr");
+        
+        // DB 장소 이름과 중복 제거 (Google 결과에서)
+        Set<String> dbPlaceNames = dbPlaces.stream()
+                .map(Place::getName)
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
+        
+        List<GooglePlacesService.PlaceSearchResult> filteredGoogleResults = googleResults.stream()
+                .filter(gr -> !dbPlaceNames.contains(gr.getName().toLowerCase()))
+                .limit(needMore)
+                .collect(Collectors.toList());
+        
+        log.info("Google 보충 결과: count={}", filteredGoogleResults.size());
+        
+        // 4단계: DB + Google 결과 합쳐서 반환
+        return buildMixedResponse(dbPlaces, filteredGoogleResults, placePage.getTotalElements(), page, size, category);
+    }
 
-        List<Place> places = placePage.getContent();
+
+    /**
+     * DB 결과만으로 응답 생성
+     */
+    private PlaceSearchResponseDto buildDbResponse(List<Place> places, Page<Place> placePage, int page, int size) {
         List<Long> placeIds = places.stream().map(Place::getId).collect(Collectors.toList());
 
         // 사진 URL 조회 (배치)
@@ -83,7 +132,6 @@ public class SearchService {
         // DTO 변환
         List<PlaceSearchResponseDto.PlaceSearchItemDto> items = places.stream()
                 .map(place -> {
-                    // 해시태그 생성 (카테고리 기반)
                     List<String> hashtags = generateHashtags(place);
                     
                     return PlaceSearchResponseDto.PlaceSearchItemDto.builder()
@@ -91,8 +139,8 @@ public class SearchService {
                             .name(place.getName())
                             .address(place.getAddress())
                             .thumbnailUrl(photoUrlMap.getOrDefault(place.getId(), null))
-                            .rating(null) // 평점은 리뷰 서비스에서 가져와야 함
-                            .likeCount(0) // 좋아요 수는 별도 조회 필요
+                            .rating(null)
+                            .likeCount(0)
                             .groupName(place.getGroup() != null ? place.getGroup().name() : null)
                             .categoryName(place.getCategory() != null ? place.getCategory().getDisplayName() : null)
                             .hashtags(hashtags)
@@ -107,6 +155,149 @@ public class SearchService {
                 .size(size)
                 .hasNext(placePage.hasNext())
                 .build();
+    }
+
+    /**
+     * DB + Google 혼합 결과로 응답 생성
+     */
+    private PlaceSearchResponseDto buildMixedResponse(
+            List<Place> dbPlaces, 
+            List<GooglePlacesService.PlaceSearchResult> googleResults,
+            long dbTotalCount,
+            int page, 
+            int size,
+            String category) {
+        
+        List<PlaceSearchResponseDto.PlaceSearchItemDto> items = new ArrayList<>();
+        
+        // 1. DB 결과 변환
+        List<Long> placeIds = dbPlaces.stream().map(Place::getId).collect(Collectors.toList());
+        final Map<Long, String> photoUrlMap;
+        if (!placeIds.isEmpty()) {
+            List<Object[]> photoResults = placePhotoRepository.findFirstPhotoUrlByPlaceIdIn(placeIds);
+            photoUrlMap = photoResults.stream()
+                    .collect(Collectors.toMap(
+                            result -> ((Number) result[0]).longValue(),
+                            result -> (String) result[1]
+                    ));
+        } else {
+            photoUrlMap = new HashMap<>();
+        }
+        
+        dbPlaces.forEach(place -> {
+            List<String> hashtags = generateHashtags(place);
+            items.add(PlaceSearchResponseDto.PlaceSearchItemDto.builder()
+                    .placeId(place.getId())
+                    .name(place.getName())
+                    .address(place.getAddress())
+                    .thumbnailUrl(photoUrlMap.getOrDefault(place.getId(), null))
+                    .rating(null)
+                    .likeCount(0)
+                    .groupName(place.getGroup() != null ? place.getGroup().name() : null)
+                    .categoryName(place.getCategory() != null ? place.getCategory().getDisplayName() : null)
+                    .hashtags(hashtags)
+                    .build());
+        });
+        
+        // 2. Google 결과 변환 및 추가
+        googleResults.forEach(result -> {
+            String categoryName = extractCategoryFromTypes(result.getTypes());
+            
+            // 카테고리 필터링
+            if (category != null && !category.isEmpty() && !category.equalsIgnoreCase(categoryName)) {
+                return;
+            }
+            
+            List<String> hashtags = generateHashtagsFromTypes(result.getTypes());
+            String thumbnailUrl = result.getPhotoReference() != null ?
+                    result.getPhotoUrl(googleMapsApiKey, 400) : null;
+            
+            items.add(PlaceSearchResponseDto.PlaceSearchItemDto.builder()
+                    .placeId(null) // Google 결과는 우리 DB ID 없음
+                    .name(result.getName())
+                    .address(result.getAddress())
+                    .thumbnailUrl(thumbnailUrl)
+                    .rating(null)
+                    .likeCount(0)
+                    .groupName(extractGroupFromTypes(result.getTypes()))
+                    .categoryName(categoryName)
+                    .hashtags(hashtags)
+                    .build());
+        });
+        
+        return PlaceSearchResponseDto.builder()
+                .places(items)
+                .totalCount(dbTotalCount + googleResults.size())
+                .page(page)
+                .size(size)
+                .hasNext(false) // 혼합 결과는 페이징 복잡하므로 false
+                .build();
+    }
+
+    /**
+     * Google Places types에서 카테고리 추출
+     */
+    private String extractCategoryFromTypes(List<String> types) {
+        if (types == null || types.isEmpty()) {
+            return "기타";
+        }
+        
+        for (String type : types) {
+            if (type.contains("restaurant") || type.contains("food") || type.contains("cafe")) {
+                return "식도락";
+            } else if (type.contains("tourist") || type.contains("park") || type.contains("museum")) {
+                return "관광지";
+            } else if (type.contains("natural") || type.contains("hiking")) {
+                return "자연/힐링";
+            }
+        }
+        return "기타";
+    }
+
+    /**
+     * Google Places types에서 대분류 추출
+     */
+    private String extractGroupFromTypes(List<String> types) {
+        if (types == null || types.isEmpty()) {
+            return null;
+        }
+        
+        for (String type : types) {
+            if (type.contains("restaurant") || type.contains("food")) {
+                return "맛집";
+            } else if (type.contains("cafe")) {
+                return "카페";
+            } else if (type.contains("tourist") || type.contains("museum") || type.contains("park")) {
+                return "관광지";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Google Places types에서 해시태그 생성
+     */
+    private List<String> generateHashtagsFromTypes(List<String> types) {
+        List<String> hashtags = new ArrayList<>();
+        
+        if (types == null || types.isEmpty()) {
+            return hashtags;
+        }
+        
+        for (String type : types) {
+            if (type.contains("restaurant") || type.contains("food")) {
+                hashtags.add("#식도락");
+                break;
+            } else if (type.contains("cafe")) {
+                hashtags.add("#감성카페");
+                break;
+            } else if (type.contains("tourist")) {
+                hashtags.add("#관광지");
+                break;
+            }
+        }
+        
+        return hashtags;
     }
 
     /**
