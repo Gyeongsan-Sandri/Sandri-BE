@@ -5,12 +5,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import sandri.sandriweb.domain.route.dto.*;
 import sandri.sandriweb.domain.favorite.dto.FavoriteRouteDto;
+import sandri.sandriweb.domain.route.dto.*;
 import sandri.sandriweb.domain.route.entity.Route;
 import sandri.sandriweb.domain.route.entity.RouteLocation;
 import sandri.sandriweb.domain.route.entity.RouteParticipant;
 import sandri.sandriweb.domain.route.entity.UserRoute;
+import sandri.sandriweb.domain.route.enums.RouteSortType;
+import sandri.sandriweb.domain.route.repository.RouteLocationRepository;
 import sandri.sandriweb.domain.route.repository.RouteParticipantRepository;
 import sandri.sandriweb.domain.route.repository.RouteRepository;
 import sandri.sandriweb.domain.route.repository.UserRouteRepository;
@@ -18,9 +20,14 @@ import sandri.sandriweb.domain.route.util.QrCodeGenerator;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
+import sandri.sandriweb.domain.place.repository.PlaceRepository;
+import sandri.sandriweb.domain.place.repository.PlacePhotoRepository;
+import sandri.sandriweb.domain.place.entity.PlacePhoto;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,6 +40,9 @@ public class RouteService {
     private final RouteParticipantRepository participantRepository;
     private final UserRepository userRepository;
     private final UserRouteRepository userRouteRepository;
+    private final RouteLocationRepository routeLocationRepository;
+    private final PlaceRepository placeRepository;
+    private final PlacePhotoRepository placePhotoRepository;
     
     @Value("${app.base-url}")
     private String baseUrl;
@@ -40,12 +50,19 @@ public class RouteService {
     @Transactional
     public ApiResponseDto<RouteResponseDto> createRoute(CreateRouteRequestDto request, User creator) {
         try {
+            // 이미지 URL 처리: 사용자가 제공하지 않으면 첫 번째 장소 사진 사용
+            String imageUrl = normalizeImageUrl(request.getImageUrl());
+            if (imageUrl == null && request.getLocations() != null && !request.getLocations().isEmpty()) {
+                imageUrl = findFirstPlacePhoto(request.getLocations().get(0).getName());
+            }
+            
             Route route = Route.builder()
                     .title(request.getTitle())
                     .startDate(request.getStartDate())
                     .endDate(request.getEndDate())
                     .creator(creator)
                     .isPublic(request.isPublic())
+                    .imageUrl(imageUrl)
                     .build();
             
             // 위치 정보 추가
@@ -61,6 +78,7 @@ public class RouteService {
                                     .longitude(locDto.getLongitude() != null ? BigDecimal.valueOf(locDto.getLongitude()) : null)
                                     .description(locDto.getDescription())
                                     .displayOrder(locDto.getDisplayOrder() != null ? locDto.getDisplayOrder() : 0)
+                                    .memo(normalizeMemo(locDto.getMemo()))
                                     .build();
                             return location;
                         })
@@ -124,6 +142,14 @@ public class RouteService {
             if (request.getIsPublic() != null) {
                 route.updateVisibility(request.getIsPublic());
             }
+            if (request.getImageUrl() != null) {
+                String imageUrl = normalizeImageUrl(request.getImageUrl());
+                // 이미지 URL이 비어있고 위치가 있으면 첫 번째 장소 사진 사용
+                if (imageUrl == null && request.getLocations() != null && !request.getLocations().isEmpty()) {
+                    imageUrl = findFirstPlacePhoto(request.getLocations().get(0).getName());
+                }
+                route.updateImageUrl(imageUrl);
+            }
             
             // 위치 정보 업데이트
             if (request.getLocations() != null) {
@@ -139,6 +165,7 @@ public class RouteService {
                                     .longitude(locDto.getLongitude() != null ? BigDecimal.valueOf(locDto.getLongitude()) : null)
                                     .description(locDto.getDescription())
                                     .displayOrder(locDto.getDisplayOrder() != null ? locDto.getDisplayOrder() : 0)
+                                    .memo(normalizeMemo(locDto.getMemo()))
                                     .build();
                             return location;
                         })
@@ -175,11 +202,22 @@ public class RouteService {
         }
     }
     
-    public ApiResponseDto<List<RouteListDto>> getUserRoutes(User user) {
+    public ApiResponseDto<List<RouteListDto>> getUserRoutes(User user, RouteSortType sortType) {
         try {
             List<Route> routes = routeRepository.findByParticipantOrCreator(user);
+
+            List<UserRoute> likedRoutes = userRouteRepository.findAllEnabledByUserId(user.getId());
+            Map<Long, UserRoute> likedRouteMap = likedRoutes.stream()
+                    .collect(Collectors.toMap(
+                            ur -> ur.getRoute().getId(),
+                            ur -> ur,
+                            (existing, duplicate) -> existing));
+
+            Comparator<Route> comparator = buildComparator(sortType, likedRouteMap);
+            routes.sort(comparator);
+
             List<RouteListDto> response = routes.stream()
-                    .map(RouteListDto::from)
+                    .map(route -> RouteListDto.from(route, likedRouteMap.containsKey(route.getId())))
                     .collect(Collectors.toList());
             
             return ApiResponseDto.success(response);
@@ -332,6 +370,42 @@ public class RouteService {
         }
     }
     
+    @Transactional
+    public ApiResponseDto<RouteResponseDto.LocationDto> upsertLocationMemo(Long routeId, Long locationId, String memo, User user) {
+        try {
+            Route route = routeRepository.findById(routeId)
+                    .orElseThrow(() -> new RuntimeException("루트를 찾을 수 없습니다"));
+
+            if (!hasRouteAccess(route, user)) {
+                throw new RuntimeException("메모 수정 권한이 없습니다");
+            }
+
+            RouteLocation location = routeLocationRepository.findById(locationId)
+                    .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다"));
+
+            if (!location.getRoute().getId().equals(routeId)) {
+                throw new RuntimeException("요청한 루트에 속한 장소가 아닙니다");
+            }
+
+            String normalizedMemo = normalizeMemo(memo);
+            location.updateMemo(normalizedMemo);
+
+            RouteResponseDto.LocationDto response = RouteResponseDto.LocationDto.from(location);
+            String message = normalizedMemo == null ? "장소 메모가 삭제되었습니다" : "장소 메모가 저장되었습니다";
+
+            return ApiResponseDto.success(message, response);
+
+        } catch (Exception e) {
+            log.error("장소 메모 저장 실패: {}", e.getMessage(), e);
+            return ApiResponseDto.error(e.getMessage());
+        }
+    }
+
+    @Transactional
+    public ApiResponseDto<RouteResponseDto.LocationDto> deleteLocationMemo(Long routeId, Long locationId, User user) {
+        return upsertLocationMemo(routeId, locationId, null, user);
+    }
+    
     public ApiResponseDto<ShareLinkResponseDto> getShareLink(Long routeId, User user) {
         try {
             Route route = routeRepository.findById(routeId)
@@ -374,6 +448,73 @@ public class RouteService {
             log.error("공유 코드로 루트 조회 실패: {}", e.getMessage(), e);
             return ApiResponseDto.error(e.getMessage());
         }
+    }
+
+    private String normalizeImageUrl(String imageUrl) {
+        if (imageUrl == null) {
+            return null;
+        }
+
+        String trimmed = imageUrl.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeMemo(String memo) {
+        if (memo == null) {
+            return null;
+        }
+
+        String trimmed = memo.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * 장소 이름으로 DB에서 첫 번째 사진 찾기
+     */
+    private String findFirstPlacePhoto(String placeName) {
+        if (placeName == null || placeName.trim().isEmpty()) {
+            return null;
+        }
+        
+        try {
+            return placeRepository.findByName(placeName.trim())
+                    .flatMap(place -> {
+                        List<PlacePhoto> photos = placePhotoRepository.findByPlaceId(place.getId());
+                        if (photos != null && !photos.isEmpty()) {
+                            return java.util.Optional.of(photos.get(0).getPhotoUrl());
+                        }
+                        return java.util.Optional.empty();
+                    })
+                    .orElse(null);
+        } catch (Exception e) {
+            log.warn("장소 사진 조회 실패: placeName={}", placeName, e);
+            return null;
+        }
+    }
+
+    private Comparator<Route> buildComparator(RouteSortType sortType, Map<Long, UserRoute> likedRouteMap) {
+        RouteSortType effectiveSort = sortType != null ? sortType : RouteSortType.LATEST;
+
+        return switch (effectiveSort) {
+            case PINNED -> Comparator
+                    .comparing((Route route) -> likedRouteMap.containsKey(route.getId()) ? 0 : 1)
+                    .thenComparing(route -> {
+                        UserRoute liked = likedRouteMap.get(route.getId());
+                        if (liked != null) {
+                            return liked.getUpdatedAt();
+                        }
+                        return route.getCreatedAt();
+                    }, Comparator.nullsLast(Comparator.reverseOrder()));
+            case OLDEST -> Comparator.comparing(Route::getCreatedAt,
+                    Comparator.nullsLast(Comparator.naturalOrder()));
+            case LATEST -> Comparator.comparing(Route::getCreatedAt,
+                    Comparator.nullsLast(Comparator.reverseOrder()));
+        };
+    }
+
+    private boolean hasRouteAccess(Route route, User user) {
+        return route.getCreator().getId().equals(user.getId()) ||
+                participantRepository.existsByRouteAndUser(route, user);
     }
 }
 

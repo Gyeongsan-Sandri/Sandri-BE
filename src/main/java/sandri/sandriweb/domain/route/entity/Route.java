@@ -42,6 +42,9 @@ public class Route {
     
     @Column(unique = true, length = 100)
     private String shareCode;
+
+    @Column(name = "image_url", length = 1000)
+    private String imageUrl;
     
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -86,6 +89,10 @@ public class Route {
     
     public void updateVisibility(boolean isPublic) {
         this.isPublic = isPublic;
+    }
+
+    public void updateImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
     }
 }
 

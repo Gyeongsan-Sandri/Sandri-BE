@@ -24,10 +24,16 @@ public class RouteListDto {
     private String creatorNickname;
     private boolean isPublic;
     private String shareCode;
+    private String imageUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private boolean liked;
     
     public static RouteListDto from(Route route) {
+        return from(route, false);
+    }
+
+    public static RouteListDto from(Route route, boolean liked) {
         return RouteListDto.builder()
                 .id(route.getId())
                 .title(route.getTitle())
@@ -38,8 +44,10 @@ public class RouteListDto {
                 .creatorNickname(route.getCreator().getNickname())
                 .isPublic(route.isPublic())
                 .shareCode(route.getShareCode())
+                .imageUrl(route.getImageUrl())
                 .createdAt(route.getCreatedAt())
                 .updatedAt(route.getUpdatedAt())
+                .liked(liked)
                 .build();
     }
 }

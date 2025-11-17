@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import sandri.sandriweb.domain.place.entity.Place;
+import sandri.sandriweb.domain.place.enums.Category;
 
 import java.util.List;
 
@@ -123,7 +124,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     /**
      * 키워드로 장소 검색 (카테고리 필터 포함)
      * @param keyword 검색 키워드
-     * @param category 카테고리 (선택사항)
+     * @param category 카테고리 enum (선택사항)
      * @param pageable 페이징 정보
      * @return 검색 결과
      */
@@ -135,7 +136,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
            "AND (:category IS NULL OR p.category = :category) " +
            "ORDER BY p.name ASC")
     Page<Place> searchByKeywordAndCategory(@Param("keyword") String keyword,
-                                           @Param("category") String category,
+                                           @Param("category") Category category,
                                            Pageable pageable);
 
 }

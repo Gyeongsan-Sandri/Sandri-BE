@@ -31,6 +31,9 @@ public class FavoriteRouteDto {
     @Schema(description = "사용자 좋아요 여부", example = "true")
     private Boolean isLiked;
 
+    @Schema(description = "대표 이미지 URL", example = "https://s3.amazonaws.com/bucket/route-cover.jpg")
+    private String imageUrl;
+
     public static FavoriteRouteDto from(Route route) {
         return FavoriteRouteDto.builder()
                 .routeId(route.getId())
@@ -38,6 +41,7 @@ public class FavoriteRouteDto {
                 .startDate(route.getStartDate())
                 .endDate(route.getEndDate())
                 .isLiked(true)
+                .imageUrl(route.getImageUrl())
                 .build();
     }
 }

@@ -34,6 +34,20 @@ curl -X GET http://localhost:8080/api/user/profile \
   -b cookies.txt
 ```
 
+## 4. 장소 검색 (Google Places API 기반)
+```bash
+curl -X GET "http://localhost:8080/api/places/search?keyword=경주%20카페&page=1&size=10" \
+  -b cookies.txt
+```
+
+**참고사항:**
+- 장소 검색은 내부 DB를 우선으로 사용합니다
+- DB 결과가 부족하면(요청 size 미만) Google Places API로 자동 보충합니다
+- DB 장소는 `placeId`가 있어 상세보기/좋아요 기능을 사용할 수 있습니다
+- Google 보충 결과는 `placeId`가 `null`이며, 이름/주소/사진만 제공됩니다
+- 평점과 좋아요 수는 모두 앱 자체 데이터를 사용합니다
+- 카테고리 필터(`category` 파라미터)는 DB와 Google 결과 모두에 적용됩니다
+
 ## 회원가입 필드 설명
 - **name**: 이름 (필수)
 - **username**: 아이디 (필수, 4-30자, 영문/숫자)
@@ -43,3 +57,11 @@ curl -X GET http://localhost:8080/api/user/profile \
 - **gender**: 성별 (필수, MALE/FEMALE/OTHER)
 - **location**: 사는 곳 (필수, 100자 이하)
 - **referrerUsername**: 추천인 아이디 (선택, 30자 이하)
+
+## Google Places API 설정
+환경 변수 `GOOGLE_MAPS_API_KEY`에 유효한 API 키를 설정해야 합니다:
+```bash
+export GOOGLE_MAPS_API_KEY=your-actual-google-api-key
+```
+
+API 키가 없거나 할당량 초과 시 자동으로 내부 DB 검색으로 전환됩니다.
