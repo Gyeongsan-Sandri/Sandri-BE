@@ -28,6 +28,7 @@ public class RouteResponseDto {
     private String creatorNickname;
     private boolean isPublic;
     private String shareCode;
+    private String imageUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<ParticipantDto> participants;
@@ -44,6 +45,7 @@ public class RouteResponseDto {
                 .creatorNickname(route.getCreator().getNickname())
                 .isPublic(route.isPublic())
                 .shareCode(route.getShareCode())
+                .imageUrl(route.getImageUrl())
                 .createdAt(route.getCreatedAt())
                 .updatedAt(route.getUpdatedAt())
                 .participants(route.getParticipants().stream()

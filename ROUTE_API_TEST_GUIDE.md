@@ -65,6 +65,7 @@ Request Body 예시:
   "description": "서울 한강 공원 산책 코스",
   "startDate": "2025-07-17",
   "endDate": "2025-07-18",
+  "imageUrl": "https://s3.amazonaws.com/your-bucket/routes/route-cover.jpg",
   "isPublic": false,
   "locations": [
     {
@@ -101,6 +102,13 @@ Response에서 `id` 값을 확인하세요 (다음 단계에서 사용).
 
 **GET** `/api/routes/my`
 
+- `sort` 쿼리 파라미터로 정렬 방식을 지정할 수 있습니다. 기본값은 `LATEST`.
+  - `PINNED`: 관심(좋아요) 등록한 루트를 먼저 노출
+  - `LATEST`: 생성일 최신순
+  - `OLDEST`: 생성일 오래된순
+
+예: `/api/routes/my?sort=PINNED`
+
 ### Step 5: 루트 수정
 
 **PUT** `/api/routes/{routeId}`
@@ -111,7 +119,8 @@ Request Body:
   "title": "수정된 루트 제목",
   "description": "수정된 설명",
   "startDate": "2025-07-17",
-  "endDate": "2025-07-19"
+  "endDate": "2025-07-19",
+  "imageUrl": ""
 }
 ```
 
@@ -184,6 +193,7 @@ Response 예시:
 2. **세션 쿠키**: 브라우저 또는 Postman에서 세션 쿠키가 자동으로 관리되어야 합니다.
 3. **데이터베이스**: `ddl-auto: create-drop` 설정으로 테스트 시 데이터가 초기화될 수 있습니다.
 4. **좌표 정보**: Google Maps API 키 없이도 테스트 가능합니다. 좌표는 수동으로 입력하거나 클라이언트에서 받아서 사용하세요.
+5. **이미지 URL**: `imageUrl`은 선택 사항이며, 빈 문자열(`""`)을 전달하면 기존 이미지가 제거됩니다.
 
 ## Google Maps API 키 (선택사항)
 

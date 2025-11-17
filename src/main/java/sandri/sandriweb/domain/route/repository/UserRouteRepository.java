@@ -21,5 +21,8 @@ public interface UserRouteRepository extends JpaRepository<UserRoute, Long> {
            "AND ur.enabled = true " +
            "ORDER BY ur.updatedAt DESC")
     List<Route> findLikedRoutesByUserId(@Param("userId") Long userId);
+
+    @Query("SELECT ur FROM UserRoute ur WHERE ur.user.id = :userId AND ur.enabled = true")
+    List<UserRoute> findAllEnabledByUserId(@Param("userId") Long userId);
 }
 

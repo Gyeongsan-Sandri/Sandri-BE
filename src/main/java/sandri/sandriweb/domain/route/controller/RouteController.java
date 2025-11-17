@@ -1,6 +1,7 @@
 package sandri.sandriweb.domain.route.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -11,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.route.dto.*;
+import sandri.sandriweb.domain.route.enums.RouteSortType;
 import sandri.sandriweb.domain.route.service.RouteService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
@@ -140,19 +142,37 @@ public class RouteController {
     }
     
     @GetMapping("/my")
-    @Operation(summary = "내 루트 목록 조회", description = "현재 사용자의 모든 루트 목록을 조회합니다")
+    @Operation(
+            summary = "내 루트 목록 조회",
+            description = "현재 사용자의 모든 루트 목록을 조회합니다. " +
+                    "정렬 옵션: PINNED(관심/고정 순), LATEST(최신 순, 기본값), OLDEST(오래된 순)."
+    )
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요")
     })
-    public ResponseEntity<ApiResponseDto<List<RouteListDto>>> getMyRoutes(Authentication authentication) {
+    public ResponseEntity<ApiResponseDto<List<RouteListDto>>> getMyRoutes(
+            Authentication authentication,
+            @Parameter(
+                    name = "sort",
+                    description = "정렬 방식: PINNED(관심/고정 순), LATEST(최신 순), OLDEST(오래된 순). 기본값은 LATEST.",
+                    example = "PINNED")
+            @RequestParam(name = "sort", required = false) String sortParam) {
         
         String username = authentication.getName();
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+
+        RouteSortType sortType;
+        try {
+            sortType = RouteSortType.from(sortParam);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error(e.getMessage()));
+        }
         
         log.info("내 루트 목록 조회: 사용자={}", username);
-        ApiResponseDto<List<RouteListDto>> response = routeService.getUserRoutes(user);
+        ApiResponseDto<List<RouteListDto>> response = routeService.getUserRoutes(user, sortType);
         
         return ResponseEntity.ok(response);
     }

@@ -34,6 +34,9 @@ public class CreateRouteRequestDto {
     @Schema(description = "공개 여부", example = "false")
     private boolean isPublic = false;
     
+    @Schema(description = "대표 이미지 URL", example = "https://s3.amazonaws.com/bucket/route-cover.jpg")
+    private String imageUrl;
+    
     @Schema(description = "장소 목록")
     private List<LocationDto> locations;
     

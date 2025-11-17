@@ -5,12 +5,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import sandri.sandriweb.domain.route.dto.*;
 import sandri.sandriweb.domain.favorite.dto.FavoriteRouteDto;
+import sandri.sandriweb.domain.route.dto.*;
 import sandri.sandriweb.domain.route.entity.Route;
 import sandri.sandriweb.domain.route.entity.RouteLocation;
 import sandri.sandriweb.domain.route.entity.RouteParticipant;
 import sandri.sandriweb.domain.route.entity.UserRoute;
+import sandri.sandriweb.domain.route.enums.RouteSortType;
 import sandri.sandriweb.domain.route.repository.RouteParticipantRepository;
 import sandri.sandriweb.domain.route.repository.RouteRepository;
 import sandri.sandriweb.domain.route.repository.UserRouteRepository;
@@ -20,7 +21,9 @@ import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,6 +49,7 @@ public class RouteService {
                     .endDate(request.getEndDate())
                     .creator(creator)
                     .isPublic(request.isPublic())
+                    .imageUrl(normalizeImageUrl(request.getImageUrl()))
                     .build();
             
             // 위치 정보 추가
@@ -124,6 +128,9 @@ public class RouteService {
             if (request.getIsPublic() != null) {
                 route.updateVisibility(request.getIsPublic());
             }
+            if (request.getImageUrl() != null) {
+                route.updateImageUrl(normalizeImageUrl(request.getImageUrl()));
+            }
             
             // 위치 정보 업데이트
             if (request.getLocations() != null) {
@@ -175,11 +182,22 @@ public class RouteService {
         }
     }
     
-    public ApiResponseDto<List<RouteListDto>> getUserRoutes(User user) {
+    public ApiResponseDto<List<RouteListDto>> getUserRoutes(User user, RouteSortType sortType) {
         try {
             List<Route> routes = routeRepository.findByParticipantOrCreator(user);
+
+            List<UserRoute> likedRoutes = userRouteRepository.findAllEnabledByUserId(user.getId());
+            Map<Long, UserRoute> likedRouteMap = likedRoutes.stream()
+                    .collect(Collectors.toMap(
+                            ur -> ur.getRoute().getId(),
+                            ur -> ur,
+                            (existing, duplicate) -> existing));
+
+            Comparator<Route> comparator = buildComparator(sortType, likedRouteMap);
+            routes.sort(comparator);
+
             List<RouteListDto> response = routes.stream()
-                    .map(RouteListDto::from)
+                    .map(route -> RouteListDto.from(route, likedRouteMap.containsKey(route.getId())))
                     .collect(Collectors.toList());
             
             return ApiResponseDto.success(response);
@@ -374,6 +392,35 @@ public class RouteService {
             log.error("공유 코드로 루트 조회 실패: {}", e.getMessage(), e);
             return ApiResponseDto.error(e.getMessage());
         }
+    }
+
+    private String normalizeImageUrl(String imageUrl) {
+        if (imageUrl == null) {
+            return null;
+        }
+
+        String trimmed = imageUrl.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Comparator<Route> buildComparator(RouteSortType sortType, Map<Long, UserRoute> likedRouteMap) {
+        RouteSortType effectiveSort = sortType != null ? sortType : RouteSortType.LATEST;
+
+        return switch (effectiveSort) {
+            case PINNED -> Comparator
+                    .comparing((Route route) -> likedRouteMap.containsKey(route.getId()) ? 0 : 1)
+                    .thenComparing(route -> {
+                        UserRoute liked = likedRouteMap.get(route.getId());
+                        if (liked != null) {
+                            return liked.getUpdatedAt();
+                        }
+                        return route.getCreatedAt();
+                    }, Comparator.nullsLast(Comparator.reverseOrder()));
+            case OLDEST -> Comparator.comparing(Route::getCreatedAt,
+                    Comparator.nullsLast(Comparator.naturalOrder()));
+            case LATEST -> Comparator.comparing(Route::getCreatedAt,
+                    Comparator.nullsLast(Comparator.reverseOrder()));
+        };
     }
 }
 

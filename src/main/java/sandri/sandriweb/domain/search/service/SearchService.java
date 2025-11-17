@@ -350,6 +350,10 @@ public class SearchService {
      * 첫 번째 RouteLocation의 name으로 Place를 찾아서 첫 번째 사진을 반환
      */
     private String getRouteThumbnail(Route route) {
+        if (route.getImageUrl() != null && !route.getImageUrl().isBlank()) {
+            return route.getImageUrl();
+        }
+
         if (route.getLocations().isEmpty()) {
             return null;
         }
