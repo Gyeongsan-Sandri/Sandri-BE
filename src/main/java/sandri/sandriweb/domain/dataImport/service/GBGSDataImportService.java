@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 import sandri.sandriweb.domain.dataImport.dto.GbgsTourApiResponse;
+import sandri.sandriweb.domain.dataImport.dto.GooglePlaceDetailsResponse;
 import sandri.sandriweb.domain.dataImport.dto.GooglePlaceResponse;
 import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.entity.PlacePhoto;
@@ -177,26 +178,42 @@ public class GBGSDataImportService {
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public ProcessResult processPlace(GbgsTourApiResponse.TourItem item, int categoryCode) {
         try {
-            // Google Place API로 검색
+            // 1단계: Google Find Place API로 place_id 검색
             GooglePlaceResponse googlePlace = googlePlaceService.findPlace(
                 item.getTitle(),
                 item.getAddress()
             );
 
+            if (googlePlace == null || googlePlace.getCandidates() == null
+                || googlePlace.getCandidates().isEmpty()) {
+                log.warn("Google Place API에서 찾을 수 없음: {}", item.getTitle());
+                return ProcessResult.FAILED;
+            }
+
+            // place_id 추출
+            String placeId = googlePlace.getCandidates().get(0).getPlaceId();
+            if (placeId == null || placeId.isEmpty()) {
+                log.warn("place_id가 없음: {}", item.getTitle());
+                return ProcessResult.FAILED;
+            }
+
+            // 2단계: Google Place Details API로 상세 정보 조회 (사진 10장, editorialSummary 포함)
+            GooglePlaceDetailsResponse placeDetails = googlePlaceService.getPlaceDetails(placeId);
+
+            if (placeDetails == null) {
+                log.warn("Place Details 조회 실패: placeId={}", placeId);
+                return ProcessResult.FAILED;
+            }
+
             // Google 데이터에서 name과 address 추출
             String placeName = item.getTitle();
             String placeAddress = item.getAddress();
 
-            if (googlePlace != null && googlePlace.getCandidates() != null
-                && !googlePlace.getCandidates().isEmpty()) {
-                GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
-                // Google 이름/주소 우선 사용
-                if (candidate.getName() != null && !candidate.getName().isEmpty()) {
-                    placeName = candidate.getName();
-                }
-                if (candidate.getFormattedAddress() != null && !candidate.getFormattedAddress().isEmpty()) {
-                    placeAddress = candidate.getFormattedAddress();
-                }
+            if (placeDetails.getDisplayName() != null && placeDetails.getDisplayName().getText() != null) {
+                placeName = placeDetails.getDisplayName().getText();
+            }
+            if (placeDetails.getFormattedAddress() != null && !placeDetails.getFormattedAddress().isEmpty()) {
+                placeAddress = placeDetails.getFormattedAddress();
             }
 
             // 기존 장소 확인 (이름 + 주소)
@@ -205,7 +222,7 @@ public class GBGSDataImportService {
             if (existingPlace.isPresent()) {
                 // 기존 장소가 있으면 PATCH (업데이트)
                 Place place = existingPlace.get();
-                boolean updated = updatePlaceFromGbgs(place, item, googlePlace, categoryCode);
+                boolean updated = updatePlaceFromGbgs(place, item, placeDetails, categoryCode);
                 if (updated) {
                     log.info("장소 업데이트 성공 (PATCH): {}", placeName);
                     return ProcessResult.IMPORTED;
@@ -215,23 +232,13 @@ public class GBGSDataImportService {
                 }
             } else {
                 // 새로운 장소면 POST (생성)
-                if (googlePlace != null && googlePlace.getCandidates() != null
-                    && !googlePlace.getCandidates().isEmpty()) {
+                Place savedPlace = createAndSavePlace(item, placeDetails, categoryCode);
 
-                    GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
-
-                    // Place 엔티티 생성 및 저장
-                    Place savedPlace = createAndSavePlace(item, candidate, categoryCode);
-
-                    if (savedPlace != null) {
-                        log.info("장소 저장 성공 (POST): {}", placeName);
-                        return ProcessResult.IMPORTED;
-                    } else {
-                        log.warn("장소 저장 실패: {}", placeName);
-                        return ProcessResult.FAILED;
-                    }
+                if (savedPlace != null) {
+                    log.info("장소 저장 성공 (POST): {}", placeName);
+                    return ProcessResult.IMPORTED;
                 } else {
-                    log.warn("Google Place API에서 찾을 수 없음: {}", item.getTitle());
+                    log.warn("장소 저장 실패: {}", placeName);
                     return ProcessResult.FAILED;
                 }
             }

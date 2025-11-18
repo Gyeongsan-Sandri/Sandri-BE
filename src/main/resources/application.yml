@@ -43,6 +43,10 @@ google:
   maps:
     api-key: ${GOOGLE_MAPS_API_KEY:your-pop-google-maps-api-key-here}
     base-url: https://maps.googleapis.com/maps/api
+  places:
+    find-place-url: https://maps.googleapis.com/maps/api/place/findplacefromtext/json
+    details-url: https://places.googleapis.com/v1/places
+    photo-url: https://maps.googleapis.com/maps/api/place/photo
 
 # 외부 API (경산시 관광 서비스)
 external:
