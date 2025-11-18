@@ -38,7 +38,7 @@ public class SwaggerConfig {
                                 .url("http://localhost:8080")
                                 .description("개발 서버"),
                         new Server()
-                                .url("http://13.125.26.64:8080")
+                                .url("http://54.180.101.221:8080")
                                 .description("배포 서버 (현재)"),
                         new Server()
                                 .url("https://api.sandri.site")
