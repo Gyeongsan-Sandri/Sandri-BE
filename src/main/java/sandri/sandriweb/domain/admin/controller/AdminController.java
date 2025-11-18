@@ -142,28 +142,28 @@ public class AdminController {
 
     // ========== 매거진 관련 ==========
 
-    @PostMapping(value = "/magazines", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(hidden = true)
-    public ResponseEntity<ApiResponseDto<Long>> createMagazineJson(
-            @Valid @RequestBody CreateMagazineRequestDto request) {
-        return handleCreateMagazine(request);
-    }
-
-    @PostMapping(value = "/magazines", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping("/magazines")
     @Operation(summary = "매거진 생성",
-               description = "Swagger 폼 입력 방식으로 매거진을 생성합니다. `cards[0].order`, `cards[0].cardUrl`과 같은 필드로 카드 이미지를 입력하세요. " +
+               description = "JSON 형태로 매거진을 생성합니다. " +
+                             "요청 예시:\n" +
+                             "```json\n" +
+                             "{\n" +
+                             "  \"name\": \"경주 여행 완벽 가이드\",\n" +
+                             "  \"summary\": \"경주의 대표 관광지를 한눈에 볼 수 있는 가이드\",\n" +
+                             "  \"content\": \"경주는 신라 천년의 고도로...\",\n" +
+                             "  \"cards\": [\n" +
+                             "    {\"order\": 0, \"cardUrl\": \"https://s3.../card1.jpg\"},\n" +
+                             "    {\"order\": 1, \"cardUrl\": \"https://s3.../card2.jpg\"}\n" +
+                             "  ]\n" +
+                             "}\n" +
+                             "```\n" +
                              "태그는 추후 별도 API로 연결합니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "생성 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
-                    schema = @Schema(implementation = CreateMagazineRequestDto.class))
-    )
-    public ResponseEntity<ApiResponseDto<Long>> createMagazineForm(
-            @Valid @ModelAttribute CreateMagazineRequestDto request) {
-
+    public ResponseEntity<ApiResponseDto<Long>> createMagazine(
+            @Valid @RequestBody CreateMagazineRequestDto request) {
         return handleCreateMagazine(request);
     }
 
