@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import sandri.sandriweb.domain.magazine.entity.MagazineCard;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -26,4 +27,12 @@ public interface MagazineCardRepository extends JpaRepository<MagazineCard, Long
      */
     @Query("SELECT c FROM MagazineCard c WHERE c.magazine.id = :magazineId AND c.order = :order AND c.enabled = true")
     Optional<MagazineCard> findByMagazineIdAndOrder(@Param("magazineId") Long magazineId, @Param("order") Integer order);
+    
+    /**
+     * 매거진의 enabled된 카드 목록 조회 (order 순서대로)
+     * @param magazineId 매거진 ID
+     * @return MagazineCard 목록 (enabled된 것만, order 순서대로)
+     */
+    @Query("SELECT c FROM MagazineCard c WHERE c.magazine.id = :magazineId AND c.enabled = true ORDER BY c.order ASC")
+    List<MagazineCard> findByMagazineIdOrderByOrderAsc(@Param("magazineId") Long magazineId);
 }

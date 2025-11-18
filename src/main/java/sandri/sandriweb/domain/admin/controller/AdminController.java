@@ -20,6 +20,7 @@ import sandri.sandriweb.domain.advertise.dto.CreatePrivateAdRequestDto;
 import sandri.sandriweb.domain.advertise.service.AdvertiseService;
 import sandri.sandriweb.domain.admin.dto.CreatePlacePhotoRequestDto;
 import sandri.sandriweb.domain.admin.dto.CreateTagRequestDto;
+import sandri.sandriweb.domain.admin.dto.MapPlaceByNameRequestDto;
 import sandri.sandriweb.domain.magazine.dto.CreateMagazineRequestDto;
 import sandri.sandriweb.domain.magazine.dto.TagDto;
 import sandri.sandriweb.domain.magazine.dto.UpdateMagazineRequestDto;
@@ -28,6 +29,7 @@ import sandri.sandriweb.domain.place.dto.CreatePlaceRequestDto;
 import sandri.sandriweb.domain.place.dto.CreatePlaceFormRequestDto;
 import sandri.sandriweb.domain.place.dto.PlaceListDto;
 import sandri.sandriweb.domain.place.dto.UpdatePlaceRequestDto;
+import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.service.PlaceService;
 import sandri.sandriweb.domain.point.dto.CreatePointEarnConditionRequestDto;
 import sandri.sandriweb.domain.point.service.PointService;
@@ -142,28 +144,17 @@ public class AdminController {
 
     // ========== 매거진 관련 ==========
 
-    @PostMapping(value = "/magazines", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(hidden = true)
-    public ResponseEntity<ApiResponseDto<Long>> createMagazineJson(
-            @Valid @RequestBody CreateMagazineRequestDto request) {
-        return handleCreateMagazine(request);
-    }
-
-    @PostMapping(value = "/magazines", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping("/magazines")
     @Operation(summary = "매거진 생성",
-               description = "Swagger 폼 입력 방식으로 매거진을 생성합니다. `cards[0].order`, `cards[0].cardUrl`과 같은 필드로 카드 이미지를 입력하세요. " +
+               description = "JSON 형식으로 매거진을 생성합니다. " +
+                             "cards 배열에는 order와 cardUrl을 포함한 카드 정보를 입력하세요. " +
                              "태그는 추후 별도 API로 연결합니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "생성 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
-                    schema = @Schema(implementation = CreateMagazineRequestDto.class))
-    )
-    public ResponseEntity<ApiResponseDto<Long>> createMagazineForm(
-            @Valid @ModelAttribute CreateMagazineRequestDto request) {
-
+    public ResponseEntity<ApiResponseDto<Long>> createMagazine(
+            @Valid @RequestBody CreateMagazineRequestDto request) {
         return handleCreateMagazine(request);
     }
 
@@ -348,10 +339,10 @@ public class AdminController {
     }
 
     @PutMapping("/magazines/{magazineId}/cards/{cardOrder}/place/{placeId}")
-    @Operation(summary = "매거진 카드에 장소 매핑",
-               description = "매거진 카드에 장소를 매핑합니다. " +
-                             "일대일 매핑이므로 기존 매핑이 있으면 새로운 장소로 교체됩니다. " +
-                             "카드는 매거진 ID와 order로 식별됩니다.")
+    @Operation(summary = "매거진 카드에 장소 매핑 (장소 ID로)",
+               description = "장소 검색 API(`GET /api/places/search`)로 검색한 결과에서 선택한 장소를 매거진 카드에 매핑합니다. " +
+                             "일대일 매핑이므로 기존 매핑이 있으면 새로운 장소로 교체됩니다.",
+               tags = {"매거진 장소매핑"})
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "매핑 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
@@ -362,12 +353,14 @@ public class AdminController {
             @PathVariable Long magazineId,
             @Parameter(description = "카드 순서 (0부터 시작)", example = "0")
             @PathVariable Integer cardOrder,
-            @Parameter(description = "장소 ID", example = "1")
+            @Parameter(description = "장소 ID (장소 검색 API로 검색한 결과의 placeId)", example = "37")
             @PathVariable Long placeId) {
 
-        log.info("매거진 카드에 장소 매핑 요청: magazineId={}, cardOrder={}, placeId={}", magazineId, cardOrder, placeId);
+        log.info("매거진 카드에 장소 매핑 요청: magazineId={}, cardOrder={}, placeId={}", 
+                 magazineId, cardOrder, placeId);
 
         try {
+            // 매거진 카드에 Place 매핑
             Long updatedCardId = magazineService.mapPlaceToCard(magazineId, cardOrder, placeId);
             return ResponseEntity.ok(ApiResponseDto.success("매거진 카드에 장소가 매핑되었습니다.", updatedCardId));
         } catch (RuntimeException e) {
@@ -388,7 +381,8 @@ public class AdminController {
     @DeleteMapping("/magazines/{magazineId}/cards/{cardOrder}/place")
     @Operation(summary = "매거진 카드에서 장소 매핑 해제",
                description = "매거진 카드에서 매핑된 장소를 해제합니다. " +
-                             "카드는 매거진 ID와 order로 식별됩니다.")
+                             "카드는 매거진 ID와 order로 식별됩니다.",
+               tags = {"매거진 장소매핑"})
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "매핑 해제 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "매거진 카드 없음")
