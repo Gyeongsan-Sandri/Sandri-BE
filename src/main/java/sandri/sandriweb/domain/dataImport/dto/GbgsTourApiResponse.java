@@ -54,5 +54,11 @@ public class GbgsTourApiResponse {
 
         @JsonProperty("homepage")
         private String homepage; // 홈페이지
+
+        @JsonProperty("image")
+        private String image; // 이미지 URL
+
+        @JsonProperty("imageUrl")
+        private String imageUrl; // 이미지 URL (대체 필드명)
     }
 }

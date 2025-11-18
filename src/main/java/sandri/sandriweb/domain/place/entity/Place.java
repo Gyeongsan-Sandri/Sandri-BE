@@ -7,6 +7,7 @@ import sandri.sandriweb.domain.review.entity.PlaceReview;
 import sandri.sandriweb.domain.review.entity.PlaceReviewPhoto;
 import sandri.sandriweb.domain.place.enums.PlaceCategory;
 import sandri.sandriweb.domain.place.enums.Category;
+import sandri.sandriweb.domain.place.enums.DataSource;
 import sandri.sandriweb.global.entity.BaseEntity;
 import org.locationtech.jts.geom.*;
 
@@ -18,7 +19,9 @@ import java.util.List;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-@Table(name = "places")
+@Table(name = "places", uniqueConstraints = {
+    @UniqueConstraint(name = "uc_place_name_address", columnNames = {"name", "address"})
+})
 public class Place extends BaseEntity {
 
     @Id
@@ -26,7 +29,7 @@ public class Place extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "name", nullable = false, unique = true)
+    @Column(name = "name", nullable = false)
     private String name;
 
     @Column(name = "address")
@@ -61,6 +64,10 @@ public class Place extends BaseEntity {
     @Column(name = "category", nullable = false)
     private Category category; // 자연/힐링, 역사/전통, 문화/체험, 식도락
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "data_source")
+    private DataSource dataSource; // 데이터 출처 (GBGS > GOOGLE > CSV)
+
     // 위도, 경도 추출 헬퍼 메서드
     public Double getLatitude() {
         return location != null ? location.getY() : null;
@@ -71,7 +78,7 @@ public class Place extends BaseEntity {
     }
 
     // 장소 정보 업데이트 메서드
-    public void update(String name, String address, Point location, String summary, 
+    public void update(String name, String address, Point location, String summary,
                        String information, PlaceCategory group, Category category) {
         if (name != null) {
             this.name = name;
@@ -94,5 +101,25 @@ public class Place extends BaseEntity {
         if (category != null) {
             this.category = category;
         }
+    }
+
+    // 데이터 소스 업데이트 (우선순위 확인 후)
+    public boolean updateWithPriority(String name, String address, Point location, String summary,
+                                      String information, PlaceCategory group, Category category,
+                                      DataSource newSource) {
+        // 새로운 소스의 우선순위가 낮으면 업데이트 안 함
+        if (newSource != null && !newSource.hasHigherOrEqualPriorityThan(this.dataSource)) {
+            return false;
+        }
+
+        // 우선순위가 같거나 높으면 업데이트
+        update(name, address, location, summary, information, group, category);
+
+        // 데이터 소스 업데이트
+        if (newSource != null) {
+            this.dataSource = newSource;
+        }
+
+        return true;
     }
 }

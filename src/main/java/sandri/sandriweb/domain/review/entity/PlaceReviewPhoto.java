@@ -11,12 +11,12 @@ import sandri.sandriweb.global.entity.BaseEntity;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-@Table(name = "places_review_photos")
+@Table(name = "place_review_photos")
 public class PlaceReviewPhoto extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "place_review_photo_id")
+    @Column(name = "place_review_photos_id")
     private Long id;
 
     @Column(name = "photo_url", nullable = false)
