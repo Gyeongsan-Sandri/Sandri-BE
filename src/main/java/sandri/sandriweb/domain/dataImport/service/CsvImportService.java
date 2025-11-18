@@ -212,7 +212,7 @@ public class CsvImportService {
             }
         }
 
-        // 요약 정보 업데이트
+        // 요약 정보 업데이트 (Google editorialSummary 우선, 없으면 상권업종소분류명)
         String newSummary = null;
         if (hasGoogleData) {
             if (placeDetails.getEditorialSummary() != null) {
@@ -223,8 +223,8 @@ public class CsvImportService {
             newSummary = cleanHtmlTags(csvData.getIndustryName());
         }
 
-        // 상세 정보 업데이트
-        String newInformation = cleanHtmlTags(csvData.getIndustryName());
+        // 상세 정보 업데이트 (CSV에는 information에 넣을 내용이 없으므로 null)
+        String newInformation = null;
 
         // 카테고리 업데이트
         PlaceCategory newGroup = mapIndustryCodeToPlaceCategory(csvData.getIndustryCode());
@@ -296,8 +296,8 @@ public class CsvImportService {
                 summary = cleanHtmlTags(csvData.getIndustryName());  // 상권업종소분류명
             }
 
-            // 상세 정보 (업종명)
-            String information = cleanHtmlTags(csvData.getIndustryName());
+            // 상세 정보 (CSV에는 information에 넣을 내용이 없으므로 null)
+            String information = null;
 
             // 카테고리 매핑 (업종코드 기반)
             PlaceCategory group = mapIndustryCodeToPlaceCategory(csvData.getIndustryCode());
@@ -386,8 +386,8 @@ public class CsvImportService {
             // 요약 정보 (상권업종소분류명)
             String summary = cleanHtmlTags(csvData.getIndustryName());
 
-            // 상세 정보 (업종명)
-            String information = cleanHtmlTags(csvData.getIndustryName());
+            // 상세 정보 (CSV에는 information에 넣을 내용이 없으므로 null)
+            String information = null;
 
             // 카테고리 매핑 (업종코드 기반)
             PlaceCategory group = mapIndustryCodeToPlaceCategory(csvData.getIndustryCode());

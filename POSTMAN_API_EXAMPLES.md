@@ -384,7 +384,7 @@ GET http://localhost:8080/api/places/1/reviews/photos?size=20
 GET http://localhost:8080/api/places/1/reviews/photos?lastPhotoId=123&size=20
 ```
 
-### 3.3 Presigned URL 발급 (리뷰 사진/영상 업로드용)
+### 3.3 Presigned URL 발급 (사진/영상 업로드용)
 ```
 POST http://localhost:8080/api/me/files
 Content-Type: application/json
@@ -404,7 +404,7 @@ Content-Type: application/json
   ]
 }
 ```
-**인증 필요**: 로그인 필수
+**인증 필요**: 없음 (인증 없이 사용 가능)
 
 **Request Body:**
 - `files` (required): 파일 정보 리스트 (최소 1개, 최대 10개)

@@ -274,17 +274,25 @@ public class GBGSDataImportService {
             );
         }
 
-        // 요약 정보 업데이트
+        // 요약 정보 업데이트 (Google editorialSummary만 사용, 외부 API summary는 information에 포함)
         String newSummary = null;
         if (placeDetails != null && placeDetails.getEditorialSummary() != null) {
             newSummary = cleanHtmlTags(placeDetails.getEditorialSummary().getText());
         }
-        if (newSummary == null || newSummary.isEmpty()) {
-            newSummary = cleanHtmlTags(item.getSummary());
-        }
 
-        // 상세 정보 업데이트
-        String newInformation = cleanHtmlTags(item.getContents());
+        // 상세 정보 업데이트 (외부 API의 summary와 contents를 개행으로 합침)
+        String externalSummary = item.getSummary() != null ? cleanHtmlTags(item.getSummary()) : "";
+        String externalContents = item.getContents() != null ? cleanHtmlTags(item.getContents()) : "";
+        String newInformation;
+        if (!externalSummary.isEmpty() && !externalContents.isEmpty()) {
+            newInformation = externalSummary + "\n" + externalContents;
+        } else if (!externalSummary.isEmpty()) {
+            newInformation = externalSummary;
+        } else if (!externalContents.isEmpty()) {
+            newInformation = externalContents;
+        } else {
+            newInformation = null;
+        }
 
         // 카테고리 업데이트
         PlaceCategory newGroup = mapCodeToPlaceCategory(categoryCode);
@@ -354,17 +362,25 @@ public class GBGSDataImportService {
                     ? placeDetails.getFormattedAddress()
                     : item.getAddress();
 
-            // 요약 정보 (Google editorialSummary 우선)
+            // 요약 정보 (Google editorialSummary만 사용, 외부 API summary는 information에 포함)
             String summary = null;
             if (placeDetails.getEditorialSummary() != null && placeDetails.getEditorialSummary().getText() != null) {
                 summary = cleanHtmlTags(placeDetails.getEditorialSummary().getText());
             }
-            if (summary == null || summary.isEmpty()) {
-                summary = cleanHtmlTags(item.getSummary());
-            }
 
-            // 상세 정보 (외부 API의 contents 사용)
-            String information = cleanHtmlTags(item.getContents());
+            // 상세 정보 (외부 API의 summary와 contents를 개행으로 합침)
+            String externalSummary = item.getSummary() != null ? cleanHtmlTags(item.getSummary()) : "";
+            String externalContents = item.getContents() != null ? cleanHtmlTags(item.getContents()) : "";
+            String information;
+            if (!externalSummary.isEmpty() && !externalContents.isEmpty()) {
+                information = externalSummary + "\n" + externalContents;
+            } else if (!externalSummary.isEmpty()) {
+                information = externalSummary;
+            } else if (!externalContents.isEmpty()) {
+                information = externalContents;
+            } else {
+                information = null;
+            }
 
             // Place 엔티티 생성 (사진 리스트 포함)
             Place place = Place.builder()

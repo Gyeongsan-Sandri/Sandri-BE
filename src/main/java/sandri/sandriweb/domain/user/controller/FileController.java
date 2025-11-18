@@ -1,6 +1,10 @@
 package sandri.sandriweb.domain.user.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,7 +37,18 @@ public class FileController {
                              "각 파일에 대한 Presigned URL을 발급하고 이와 함께 finalUrl과 order를 반환합니다. " +
                              "발급된 Presigned URL로 PUT 요청을 보내 파일을 업로드하고, " +
                              "업로드 완료 후 finalUrl과 order를 리뷰 작성 시 사용합니다. " +
-                             "인증 없이 사용 가능합니다.")
+                             "인증 없이 사용 가능합니다.",
+               requestBody = @RequestBody(
+                       description = "파일 정보 리스트",
+                       required = true,
+                       content = @Content(
+                               schema = @Schema(implementation = RequestPresignedUrlRequestDto.class),
+                               examples = @ExampleObject(
+                                       name = "Presigned URL 발급 예제",
+                                       value = "{\n  \"files\": [\n    {\n      \"fileName\": \"photo1.jpg\",\n      \"contentType\": \"image/jpeg\",\n      \"order\": 0\n    },\n    {\n      \"fileName\": \"photo2.png\",\n      \"contentType\": \"image/png\",\n      \"order\": 1\n    }\n  ]\n}"
+                               )
+                       )
+               ))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Presigned URL 발급 성공"),
             @ApiResponse(responseCode = "400", description = "잘못된 요청")
