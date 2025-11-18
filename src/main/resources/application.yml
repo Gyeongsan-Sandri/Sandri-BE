@@ -47,7 +47,7 @@ google:
 # 외부 API (경산시 관광 서비스)
 external:
   api:
-    service-key: ${GBGS_API_SERVICE_KEY:your-external-api-service-key-here}
+    service-key: ${GOV_OPEN_API_KEY:your-external-api-service-key-here}
     base-url: http://apis.data.go.kr/5130000/openapi/GbgsTourService/getTourContentList
 
 # AWS S3

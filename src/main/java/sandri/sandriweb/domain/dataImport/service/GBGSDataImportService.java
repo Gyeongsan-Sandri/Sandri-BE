@@ -26,15 +26,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class GBGSDataImportService {
 
     private final PlaceRepository placeRepository;
     private final GooglePlaceService googlePlaceService;
     private final EntityManager entityManager;
+    private final GBGSDataImportService self;  // Self-injection for @Transactional(REQUIRES_NEW)
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public GBGSDataImportService(PlaceRepository placeRepository,
+                                GooglePlaceService googlePlaceService,
+                                EntityManager entityManager,
+                                @org.springframework.context.annotation.Lazy GBGSDataImportService self) {
+        this.placeRepository = placeRepository;
+        this.googlePlaceService = googlePlaceService;
+        this.entityManager = entityManager;
+        this.self = self;
+    }
 
     @Value("${external.api.service-key}")
     private String serviceKey;
@@ -47,14 +57,23 @@ public class GBGSDataImportService {
     private static final int NUM_OF_ROWS = 100; // 한 페이지당 조회 개수
 
     /**
+     * 장소 처리 결과
+     */
+    private enum ProcessResult {
+        IMPORTED,  // 성공 (생성 또는 업데이트)
+        SKIPPED,   // 스킵 (변경사항 없음)
+        FAILED     // 실패
+    }
+
+    /**
      * 외부 API에서 데이터를 가져와 Google Place API로 검색 후 DB에 저장
      * @return 처리 결과 메시지
      */
-    @Transactional
     public String importPlacesFromExternalApi() {
         int totalImported = 0;
         int totalFailed = 0;
         int totalSkipped = 0;
+        int apiCallFailures = 0; // API 호출 실패 카운트
 
         log.info("데이터 임포트 시작");
 
@@ -67,7 +86,8 @@ public class GBGSDataImportService {
                 GbgsTourApiResponse firstPageResponse = fetchExternalApiData(code, 1, NUM_OF_ROWS);
 
                 if (firstPageResponse == null || firstPageResponse.getTotalCount() == null) {
-                    log.warn("카테고리 코드 {} 첫 페이지 조회 실패", code);
+                    log.error("카테고리 코드 {} 첫 페이지 조회 실패 - 경산시 API 호출 실패", code);
+                    apiCallFailures++;
                     continue;
                 }
 
@@ -99,86 +119,126 @@ public class GBGSDataImportService {
                     // 4단계: 각 항목 처리
                     for (GbgsTourApiResponse.TourItem item : items) {
                         try {
-                            // Google Place API로 검색
-                            GooglePlaceResponse googlePlace = googlePlaceService.findPlace(
-                                item.getTitle(),
-                                item.getAddress()
-                            );
-
-                            // Google 데이터에서 name과 address 추출
-                            String placeName = item.getTitle();
-                            String placeAddress = item.getAddress();
-
-                            if (googlePlace != null && googlePlace.getCandidates() != null
-                                && !googlePlace.getCandidates().isEmpty()) {
-                                GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
-                                // Google 이름/주소 우선 사용
-                                if (candidate.getName() != null && !candidate.getName().isEmpty()) {
-                                    placeName = candidate.getName();
-                                }
-                                if (candidate.getFormattedAddress() != null && !candidate.getFormattedAddress().isEmpty()) {
-                                    placeAddress = candidate.getFormattedAddress();
-                                }
-                            }
-
-                            // 기존 장소 확인 (이름 + 주소)
-                            java.util.Optional<Place> existingPlace = placeRepository.findByNameAndAddress(placeName, placeAddress);
-
-                            if (existingPlace.isPresent()) {
-                                // 기존 장소가 있으면 PATCH (업데이트)
-                                Place place = existingPlace.get();
-                                boolean updated = updatePlaceFromGbgs(place, item, googlePlace, code);
-                                if (updated) {
-                                    totalImported++;
-                                    log.info("장소 업데이트 성공 (PATCH): {}", placeName);
-                                } else {
-                                    totalSkipped++;
-                                    log.debug("장소 업데이트 불필요 (데이터 동일): {}", placeName);
-                                }
+                            ProcessResult result = self.processPlace(item, code);  // Self-injection으로 호출
+                            if (result == ProcessResult.IMPORTED) {
+                                totalImported++;
+                            } else if (result == ProcessResult.SKIPPED) {
+                                totalSkipped++;
                             } else {
-                                // 새로운 장소면 POST (생성)
-                                if (googlePlace != null && googlePlace.getCandidates() != null
-                                    && !googlePlace.getCandidates().isEmpty()) {
-
-                                    GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
-
-                                    // Place 엔티티 생성 및 저장
-                                    Place savedPlace = createAndSavePlace(item, candidate, code);
-
-                                    if (savedPlace != null) {
-                                        totalImported++;
-                                        log.info("장소 저장 성공 (POST): {}", placeName);
-                                    } else {
-                                        totalFailed++;
-                                        // 저장 실패 시 세션 클리어하여 다음 아이템 처리 가능하도록 함
-                                        entityManager.clear();
-                                        log.info("세션 클리어 완료 (저장 실패 후)");
-                                    }
-                                } else {
-                                    log.warn("Google Place API에서 찾을 수 없음: {}", item.getTitle());
-                                    totalFailed++;
-                                }
+                                totalFailed++;
                             }
-
                         } catch (Exception e) {
-                            log.error("장소 처리 중 오류: name={}, error={}", item.getTitle(), e.getMessage(), e);
+                            log.error("장소 처리 중 오류: name={}, error={}", item.getTitle(), e.getMessage());
                             totalFailed++;
-                            // 예외 발생 시 세션 클리어하여 다음 아이템 처리 가능하도록 함
-                            entityManager.clear();
-                            log.info("세션 클리어 완료 (예외 발생 후)");
                         }
                     }
                 }
             }
 
+            // API 호출 실패 검증
+            if (apiCallFailures == CATEGORY_CODES.length) {
+                // 모든 카테고리 API 호출 실패
+                throw new RuntimeException(
+                    String.format("경산시 API 호출 실패: 모든 카테고리(%d개)에서 데이터를 가져오지 못했습니다. " +
+                                  "API 키, 네트워크 연결, 외부 API 상태를 확인해주세요.",
+                                  CATEGORY_CODES.length)
+                );
+            }
+
+            if (apiCallFailures > 0) {
+                // 일부 카테고리 API 호출 실패
+                String result = String.format(
+                    "데이터 임포트 부분 완료 - 성공: %d, 실패: %d, 스킵: %d, API 호출 실패: %d개 카테고리",
+                    totalImported, totalFailed, totalSkipped, apiCallFailures
+                );
+                log.warn(result);
+                return result;
+            }
+
+            // 정상 완료
             String result = String.format("데이터 임포트 완료 - 성공: %d, 실패: %d, 스킵: %d",
                 totalImported, totalFailed, totalSkipped);
             log.info(result);
             return result;
 
+        } catch (RuntimeException e) {
+            // 이미 처리된 RuntimeException은 그대로 전파
+            throw e;
         } catch (Exception e) {
-            log.error("데이터 임포트 중 오류 발생", e);
+            log.error("데이터 임포트 중 예기치 않은 오류 발생", e);
             throw new RuntimeException("데이터 임포트 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 개별 장소 처리 (독립적인 트랜잭션)
+     * @return 처리 결과
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public ProcessResult processPlace(GbgsTourApiResponse.TourItem item, int categoryCode) {
+        try {
+            // Google Place API로 검색
+            GooglePlaceResponse googlePlace = googlePlaceService.findPlace(
+                item.getTitle(),
+                item.getAddress()
+            );
+
+            // Google 데이터에서 name과 address 추출
+            String placeName = item.getTitle();
+            String placeAddress = item.getAddress();
+
+            if (googlePlace != null && googlePlace.getCandidates() != null
+                && !googlePlace.getCandidates().isEmpty()) {
+                GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
+                // Google 이름/주소 우선 사용
+                if (candidate.getName() != null && !candidate.getName().isEmpty()) {
+                    placeName = candidate.getName();
+                }
+                if (candidate.getFormattedAddress() != null && !candidate.getFormattedAddress().isEmpty()) {
+                    placeAddress = candidate.getFormattedAddress();
+                }
+            }
+
+            // 기존 장소 확인 (이름 + 주소)
+            java.util.Optional<Place> existingPlace = placeRepository.findByNameAndAddress(placeName, placeAddress);
+
+            if (existingPlace.isPresent()) {
+                // 기존 장소가 있으면 PATCH (업데이트)
+                Place place = existingPlace.get();
+                boolean updated = updatePlaceFromGbgs(place, item, googlePlace, categoryCode);
+                if (updated) {
+                    log.info("장소 업데이트 성공 (PATCH): {}", placeName);
+                    return ProcessResult.IMPORTED;
+                } else {
+                    log.debug("장소 업데이트 불필요 (데이터 동일): {}", placeName);
+                    return ProcessResult.SKIPPED;
+                }
+            } else {
+                // 새로운 장소면 POST (생성)
+                if (googlePlace != null && googlePlace.getCandidates() != null
+                    && !googlePlace.getCandidates().isEmpty()) {
+
+                    GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
+
+                    // Place 엔티티 생성 및 저장
+                    Place savedPlace = createAndSavePlace(item, candidate, categoryCode);
+
+                    if (savedPlace != null) {
+                        log.info("장소 저장 성공 (POST): {}", placeName);
+                        return ProcessResult.IMPORTED;
+                    } else {
+                        log.warn("장소 저장 실패: {}", placeName);
+                        return ProcessResult.FAILED;
+                    }
+                } else {
+                    log.warn("Google Place API에서 찾을 수 없음: {}", item.getTitle());
+                    return ProcessResult.FAILED;
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("장소 처리 중 예외 발생: name={}, error={}", item.getTitle(), e.getMessage(), e);
+            return ProcessResult.FAILED;
         }
     }
 
