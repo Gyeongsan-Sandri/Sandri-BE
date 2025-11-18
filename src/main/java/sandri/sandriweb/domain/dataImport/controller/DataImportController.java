@@ -91,18 +91,36 @@ public class DataImportController {
                             allowableValues = {"insert", "upsert"}
                     )
             )
-            @RequestParam(value = "mode", defaultValue = "insert") String mode) {
+            @RequestParam(value = "mode", defaultValue = "insert") String mode,
+
+            jakarta.servlet.http.HttpServletRequest request) {
+
+        // 요청 파라미터 전체 로깅
+        log.info("=== 요청 디버깅 시작 ===");
+        log.info("Request URI: {}", request.getRequestURI());
+        log.info("Query String: {}", request.getQueryString());
+        request.getParameterMap().forEach((key, values) -> {
+            log.info("Parameter [{}]: {}", key, String.join(", ", values));
+        });
+        log.info("=== 요청 디버깅 끝 ===");
 
         log.info("CSV 데이터 임포트 요청: fileName={}, mode={}", fileName, mode);
 
+        // mode 중복 파라미터 처리 (Spring이 쉼표로 합침)
+        String normalizedMode = mode.contains(",") ? mode.split(",")[0].trim() : mode.trim();
+        if (!normalizedMode.equals(mode)) {
+            log.warn("중복된 mode 파라미터 감지: [{}] -> [{}]", mode, normalizedMode);
+        }
+
         // mode 검증
-        if (!mode.equals("insert") && !mode.equals("upsert")) {
+        if (!normalizedMode.equals("insert") && !normalizedMode.equals("upsert")) {
+            log.error("잘못된 mode 값: [{}]", normalizedMode);
             return ResponseEntity.badRequest()
                     .body(ApiResponseDto.error("mode는 'insert' 또는 'upsert'만 가능합니다."));
         }
 
         try {
-            String result = csvImportService.importStoresFromLocalFile(fileName, mode);
+            String result = csvImportService.importStoresFromLocalFile(fileName, normalizedMode);
             return ResponseEntity.ok(ApiResponseDto.success(result));
 
         } catch (Exception e) {

@@ -67,8 +67,10 @@ public class CsvImportService {
         log.info("로컬 CSV 파일 임포트 시작: filename={}, mode={}", fileName, mode);
 
         try {
-            // 파일 경로 생성 (프로젝트 루트/datafile/파일명)
-            Path csvPath = Paths.get("datafile", fileName);
+            // 프로젝트 루트 기준 파일 경로 생성
+            String projectRoot = System.getProperty("user.dir");
+            Path csvPath = Paths.get(projectRoot, "datafile", fileName);
+            log.info("프로젝트 루트: {}", projectRoot);
             log.info("CSV 파일 경로: {}", csvPath.toAbsolutePath());
 
             // CSV 파일 파싱
