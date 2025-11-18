@@ -22,6 +22,7 @@ import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 import sandri.sandriweb.domain.place.repository.PlacePhotoRepository;
+import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.entity.PlacePhoto;
 
 import java.math.BigDecimal;
@@ -384,6 +385,58 @@ public class RouteService {
         }
     }
     
+    @Transactional
+    public ApiResponseDto<RouteResponseDto.LocationDto> addLocation(Long routeId, AddLocationRequestDto request, User user) {
+        try {
+            Route route = routeRepository.findById(routeId)
+                    .orElseThrow(() -> new RuntimeException("루트를 찾을 수 없습니다"));
+
+            if (!hasRouteAccess(route, user)) {
+                throw new RuntimeException("장소 추가 권한이 없습니다");
+            }
+
+            // Place 조회
+            Place place = placeRepository.findById(request.getPlaceId())
+                    .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다"));
+
+            // dayNumber 유효성 검증 (1 이상이어야 함)
+            if (request.getDayNumber() == null || request.getDayNumber() < 1) {
+                throw new RuntimeException("일차 번호는 1 이상이어야 합니다");
+            }
+
+            // displayOrder가 지정되지 않은 경우, 해당 dayNumber의 마지막 순서로 설정
+            Integer displayOrder = request.getDisplayOrder();
+            if (displayOrder == null) {
+                List<RouteLocation> existingLocations = routeLocationRepository
+                        .findByRouteAndDayNumberOrderByDisplayOrderAsc(route, request.getDayNumber());
+                displayOrder = existingLocations.isEmpty() ? 0 : 
+                        existingLocations.get(existingLocations.size() - 1).getDisplayOrder() + 1;
+            }
+
+            // Place 정보를 사용하여 RouteLocation 생성
+            RouteLocation location = RouteLocation.builder()
+                    .route(route)
+                    .dayNumber(request.getDayNumber())
+                    .name(place.getName())
+                    .address(place.getAddress())
+                    .latitude(place.getLatitude() != null ? BigDecimal.valueOf(place.getLatitude()) : null)
+                    .longitude(place.getLongitude() != null ? BigDecimal.valueOf(place.getLongitude()) : null)
+                    .description(place.getSummery())
+                    .displayOrder(displayOrder)
+                    .memo(normalizeMemo(request.getMemo()))
+                    .build();
+
+            RouteLocation savedLocation = routeLocationRepository.save(location);
+
+            RouteResponseDto.LocationDto response = RouteResponseDto.LocationDto.from(savedLocation);
+            return ApiResponseDto.success("장소가 추가되었습니다", response);
+
+        } catch (Exception e) {
+            log.error("장소 추가 실패: {}", e.getMessage(), e);
+            return ApiResponseDto.error(e.getMessage());
+        }
+    }
+
     @Transactional
     public ApiResponseDto<RouteResponseDto.LocationDto> upsertLocationMemo(Long routeId, Long locationId, String memo, User user) {
         try {
