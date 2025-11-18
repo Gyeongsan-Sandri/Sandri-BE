@@ -4,7 +4,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,7 +37,7 @@ public class FileController {
                              "발급된 Presigned URL로 PUT 요청을 보내 파일을 업로드하고, " +
                              "업로드 완료 후 finalUrl과 order를 리뷰 작성 시 사용합니다. " +
                              "인증 없이 사용 가능합니다.",
-               requestBody = @RequestBody(
+               requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                        description = "파일 정보 리스트",
                        required = true,
                        content = @Content(
