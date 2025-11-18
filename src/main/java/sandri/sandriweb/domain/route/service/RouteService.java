@@ -22,7 +22,10 @@ import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 import sandri.sandriweb.domain.place.repository.PlacePhotoRepository;
+import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.entity.PlacePhoto;
+import sandri.sandriweb.domain.place.enums.PlaceCategory;
+import sandri.sandriweb.domain.place.enums.Category;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -384,6 +387,176 @@ public class RouteService {
         }
     }
     
+    @Transactional
+    public ApiResponseDto<RouteResponseDto.LocationDto> addLocation(Long routeId, AddLocationRequestDto request, User user) {
+        try {
+            Route route = routeRepository.findById(routeId)
+                    .orElseThrow(() -> new RuntimeException("루트를 찾을 수 없습니다"));
+
+            if (!hasRouteAccess(route, user)) {
+                throw new RuntimeException("장소 추가 권한이 없습니다");
+            }
+
+            // dayNumber 유효성 검증 (1 이상이어야 함)
+            if (request.getDayNumber() == null || request.getDayNumber() < 1) {
+                throw new RuntimeException("일차 번호는 1 이상이어야 합니다");
+            }
+
+            // Place 조회 또는 생성
+            Place place;
+            if (request.getPlaceId() != null) {
+                // DB에 있는 장소 사용
+                place = placeRepository.findById(request.getPlaceId())
+                        .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다"));
+            } else if (request.getGooglePlaceInfo() != null) {
+                // Google Places 정보로 Place 생성
+                place = createPlaceFromGooglePlaces(request.getGooglePlaceInfo());
+            } else {
+                throw new RuntimeException("placeId 또는 googlePlaceInfo 중 하나는 필수입니다");
+            }
+
+            // displayOrder가 지정되지 않은 경우, 해당 dayNumber의 마지막 순서로 설정
+            Integer displayOrder = request.getDisplayOrder();
+            if (displayOrder == null) {
+                List<RouteLocation> existingLocations = routeLocationRepository
+                        .findByRouteAndDayNumberOrderByDisplayOrderAsc(route, request.getDayNumber());
+                displayOrder = existingLocations.isEmpty() ? 0 : 
+                        existingLocations.get(existingLocations.size() - 1).getDisplayOrder() + 1;
+            }
+
+            // Place 정보를 사용하여 RouteLocation 생성
+            RouteLocation location = RouteLocation.builder()
+                    .route(route)
+                    .dayNumber(request.getDayNumber())
+                    .name(place.getName())
+                    .address(place.getAddress())
+                    .latitude(place.getLatitude() != null ? BigDecimal.valueOf(place.getLatitude()) : null)
+                    .longitude(place.getLongitude() != null ? BigDecimal.valueOf(place.getLongitude()) : null)
+                    .description(place.getSummery())
+                    .displayOrder(displayOrder)
+                    .memo(normalizeMemo(request.getMemo()))
+                    .build();
+
+            RouteLocation savedLocation = routeLocationRepository.save(location);
+
+            RouteResponseDto.LocationDto response = RouteResponseDto.LocationDto.from(savedLocation);
+            return ApiResponseDto.success("장소가 추가되었습니다", response);
+
+        } catch (Exception e) {
+            log.error("장소 추가 실패: {}", e.getMessage(), e);
+            return ApiResponseDto.error(e.getMessage());
+        }
+    }
+
+    /**
+     * Google Places 정보로 Place 생성
+     */
+    @Transactional
+    private Place createPlaceFromGooglePlaces(AddLocationRequestDto.GooglePlaceInfo googlePlaceInfo) {
+        // 이름과 좌표 필수 검증
+        if (googlePlaceInfo.getName() == null || googlePlaceInfo.getName().trim().isEmpty()) {
+            throw new RuntimeException("장소 이름은 필수입니다");
+        }
+        if (googlePlaceInfo.getLatitude() == null || googlePlaceInfo.getLongitude() == null) {
+            throw new RuntimeException("위도와 경도는 필수입니다");
+        }
+
+        // 이미 같은 이름의 장소가 있으면 기존 장소 반환
+        String placeName = googlePlaceInfo.getName().trim();
+        java.util.Optional<Place> existingPlace = placeRepository.findByName(placeName);
+        if (existingPlace.isPresent()) {
+            log.info("기존 장소 사용: placeId={}, name={}", existingPlace.get().getId(), placeName);
+            return existingPlace.get();
+        }
+
+        // Google Places types에서 카테고리 추출
+        PlaceCategory group = extractGroupFromTypes(googlePlaceInfo.getTypes());
+        Category category = extractCategoryFromTypes(googlePlaceInfo.getTypes());
+
+        // 좌표 생성
+        org.locationtech.jts.geom.Coordinate coordinate = new org.locationtech.jts.geom.Coordinate(
+                googlePlaceInfo.getLongitude(),
+                googlePlaceInfo.getLatitude()
+        );
+        org.locationtech.jts.geom.Point location = new org.locationtech.jts.geom.GeometryFactory(
+                new org.locationtech.jts.geom.PrecisionModel(), 4326
+        ).createPoint(coordinate);
+
+        // Place 생성
+        Place place = Place.builder()
+                .name(placeName)
+                .address(googlePlaceInfo.getAddress())
+                .location(location)
+                .summery(null)
+                .information(null)
+                .group(group)
+                .category(category)
+                .build();
+
+        Place savedPlace = placeRepository.save(place);
+        log.info("Google Places 정보로 장소 생성 완료: placeId={}, name={}", savedPlace.getId(), placeName);
+
+        // 사진이 있으면 PlacePhoto 추가
+        if (googlePlaceInfo.getPhotoUrl() != null && !googlePlaceInfo.getPhotoUrl().trim().isEmpty()) {
+            PlacePhoto placePhoto = PlacePhoto.builder()
+                    .place(savedPlace)
+                    .photoUrl(googlePlaceInfo.getPhotoUrl().trim())
+                    .order(0)
+                    .build();
+            placePhotoRepository.save(placePhoto);
+            log.info("Google Places 사진 추가: placeId={}, photoUrl={}", savedPlace.getId(), googlePlaceInfo.getPhotoUrl());
+        }
+
+        return savedPlace;
+    }
+
+    /**
+     * Google Places types에서 대분류 추출
+     */
+    private PlaceCategory extractGroupFromTypes(List<String> types) {
+        if (types == null || types.isEmpty()) {
+            return PlaceCategory.관광지; // 기본값
+        }
+
+        for (String type : types) {
+            if (type.contains("restaurant") || type.contains("food") || type.contains("meal")) {
+                return PlaceCategory.맛집;
+            } else if (type.contains("cafe") || type.contains("coffee")) {
+                return PlaceCategory.카페;
+            } else if (type.contains("tourist") || type.contains("museum") || type.contains("park") || 
+                       type.contains("attraction") || type.contains("point_of_interest")) {
+                return PlaceCategory.관광지;
+            }
+        }
+        return PlaceCategory.관광지; // 기본값
+    }
+
+    /**
+     * Google Places types에서 세부 카테고리 추출
+     */
+    private Category extractCategoryFromTypes(List<String> types) {
+        if (types == null || types.isEmpty()) {
+            return Category.자연_힐링; // 기본값
+        }
+
+        for (String type : types) {
+            if (type.contains("restaurant") || type.contains("food") || type.contains("meal") || 
+                type.contains("cafe") || type.contains("coffee")) {
+                return Category.식도락;
+            } else if (type.contains("natural") || type.contains("park") || type.contains("hiking") || 
+                       type.contains("beach") || type.contains("mountain")) {
+                return Category.자연_힐링;
+            } else if (type.contains("museum") || type.contains("art") || type.contains("gallery") || 
+                       type.contains("theater") || type.contains("stadium")) {
+                return Category.문화_체험;
+            } else if (type.contains("temple") || type.contains("church") || type.contains("shrine") || 
+                       type.contains("historical") || type.contains("monument")) {
+                return Category.역사_전통;
+            }
+        }
+        return Category.자연_힐링; // 기본값
+    }
+
     @Transactional
     public ApiResponseDto<RouteResponseDto.LocationDto> upsertLocationMemo(Long routeId, Long locationId, String memo, User user) {
         try {
