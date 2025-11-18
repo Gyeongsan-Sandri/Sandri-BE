@@ -25,6 +25,14 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     boolean existsByNameAndAddress(String name, String address);
 
     /**
+     * 이름과 주소로 장소 조회
+     * @param name 장소 이름
+     * @param address 주소
+     * @return 장소 (없으면 Optional.empty())
+     */
+    java.util.Optional<Place> findByNameAndAddress(String name, String address);
+
+    /**
      * 이름으로 장소 조회
      * @param name 장소 이름
      * @return 장소 (없으면 Optional.empty())

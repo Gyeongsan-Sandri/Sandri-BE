@@ -16,6 +16,7 @@ import sandri.sandriweb.domain.dataImport.dto.StoreCsvDto;
 import sandri.sandriweb.domain.place.entity.Place;
 import sandri.sandriweb.domain.place.entity.PlacePhoto;
 import sandri.sandriweb.domain.place.enums.Category;
+import sandri.sandriweb.domain.place.enums.DataSource;
 import sandri.sandriweb.domain.place.enums.PlaceCategory;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 
@@ -117,39 +118,109 @@ public class CsvImportService {
                 ? store.getRoadAddress()
                 : store.getJibunAddress();
 
-        // 이미 존재하는 장소는 스킵 (이름 + 주소 동일)
-        if (placeRepository.existsByNameAndAddress(fullName, address)) {
-            log.debug("이미 존재하는 장소 (이름+주소 동일): {}, {}", fullName, address);
-            return false;
-        }
+        // 기존 장소 확인 (이름 + 주소)
+        java.util.Optional<Place> existingPlace = placeRepository.findByNameAndAddress(fullName, address);
 
         // Google Place API로 검색
         GooglePlaceResponse googlePlace = googlePlaceService.findPlace(fullName, address);
 
-        if (googlePlace != null && googlePlace.getCandidates() != null
-                && !googlePlace.getCandidates().isEmpty()) {
-
-            GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
-
-            // Place 엔티티 생성 및 저장 (Google 데이터 기반)
-            Place savedPlace = createAndSavePlaceFromCsv(store, candidate);
-
-            if (savedPlace != null) {
-                log.info("장소 저장 성공 (Google 데이터): {}", fullName);
+        if (existingPlace.isPresent()) {
+            // 기존 장소가 있으면 PATCH (업데이트)
+            Place place = existingPlace.get();
+            boolean updated = updatePlaceFromCsv(place, store, googlePlace);
+            if (updated) {
+                log.info("장소 업데이트 성공 (PATCH): {}", fullName);
                 return true;
+            } else {
+                log.debug("장소 업데이트 불필요 (데이터 동일): {}", fullName);
+                return false;
             }
         } else {
-            // Google Place API에서 찾을 수 없는 경우 CSV 데이터로 직접 저장
-            log.info("Google Place API에서 찾을 수 없음. CSV 데이터로 저장 시도: {}", fullName);
-            Place savedPlace = createAndSavePlaceFromCsvOnly(store);
+            // 새로운 장소면 POST (생성)
+            if (googlePlace != null && googlePlace.getCandidates() != null
+                    && !googlePlace.getCandidates().isEmpty()) {
 
-            if (savedPlace != null) {
-                log.info("장소 저장 성공 (CSV 데이터): {}", fullName);
-                return true;
+                GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
+
+                // Place 엔티티 생성 및 저장 (Google 데이터 기반)
+                Place savedPlace = createAndSavePlaceFromCsv(store, candidate);
+
+                if (savedPlace != null) {
+                    log.info("장소 저장 성공 (POST - Google 데이터): {}", fullName);
+                    return true;
+                }
+            } else {
+                // Google Place API에서 찾을 수 없는 경우 CSV 데이터로 직접 저장
+                log.info("Google Place API에서 찾을 수 없음. CSV 데이터로 저장 시도: {}", fullName);
+                Place savedPlace = createAndSavePlaceFromCsvOnly(store);
+
+                if (savedPlace != null) {
+                    log.info("장소 저장 성공 (POST - CSV 데이터): {}", fullName);
+                    return true;
+                }
             }
         }
 
         return false;
+    }
+
+    /**
+     * 기존 Place를 CSV 데이터로 업데이트 (PATCH)
+     * @return true: 업데이트됨, false: 변경사항 없음
+     */
+    private boolean updatePlaceFromCsv(Place place, StoreCsvDto csvData, GooglePlaceResponse googlePlace) {
+        // 데이터 소스 결정 (Google 데이터가 있으면 GOOGLE, 없으면 CSV)
+        DataSource dataSource;
+        boolean hasGoogleData = googlePlace != null && googlePlace.getCandidates() != null
+                                && !googlePlace.getCandidates().isEmpty();
+        dataSource = hasGoogleData ? DataSource.GOOGLE : DataSource.CSV;
+
+        // 좌표 업데이트
+        Point newLocation = null;
+        if (hasGoogleData) {
+            // Google 좌표 우선
+            GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
+            newLocation = geometryFactory.createPoint(
+                new Coordinate(
+                    candidate.getGeometry().getLocation().getLng(),
+                    candidate.getGeometry().getLocation().getLat()
+                )
+            );
+        } else if (csvData.getLongitude() != null && !csvData.getLongitude().isEmpty()
+                && csvData.getLatitude() != null && !csvData.getLatitude().isEmpty()) {
+            // CSV 좌표 사용
+            try {
+                double longitude = Double.parseDouble(csvData.getLongitude());
+                double latitude = Double.parseDouble(csvData.getLatitude());
+                newLocation = geometryFactory.createPoint(new Coordinate(longitude, latitude));
+            } catch (NumberFormatException e) {
+                log.warn("좌표 변환 실패: lng={}, lat={}", csvData.getLongitude(), csvData.getLatitude());
+            }
+        }
+
+        // 요약 정보 업데이트
+        String newSummary = null;
+        if (hasGoogleData) {
+            GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
+            if (candidate.getEditorialSummary() != null) {
+                newSummary = cleanHtmlTags(candidate.getEditorialSummary().getOverview());
+            }
+        }
+        if (newSummary == null || newSummary.isEmpty()) {
+            newSummary = cleanHtmlTags(csvData.getIndustryName());
+        }
+
+        // 상세 정보 업데이트
+        String newInformation = cleanHtmlTags(csvData.getIndustryName());
+
+        // 카테고리 업데이트
+        PlaceCategory newGroup = mapIndustryCodeToPlaceCategory(csvData.getIndustryCode());
+        Category newCategory = mapIndustryCodeToCategory(csvData.getIndustryCode());
+
+        // 우선순위 기반 업데이트
+        return place.updateWithPriority(null, null, newLocation, newSummary,
+                                       newInformation, newGroup, newCategory,
+                                       dataSource);
     }
 
     /**
@@ -208,14 +279,14 @@ public class CsvImportService {
             // 요약 정보 (Google 우선, 없으면 CSV의 상권업종소분류명)
             String summary = null;
             if (googleCandidate.getEditorialSummary() != null) {
-                summary = googleCandidate.getEditorialSummary().getOverview();
+                summary = cleanHtmlTags(googleCandidate.getEditorialSummary().getOverview());
             }
             if (summary == null || summary.isEmpty()) {
-                summary = csvData.getIndustryName();  // 상권업종소분류명
+                summary = cleanHtmlTags(csvData.getIndustryName());  // 상권업종소분류명
             }
 
             // 상세 정보 (업종명)
-            String information = csvData.getIndustryName();
+            String information = cleanHtmlTags(csvData.getIndustryName());
 
             // 카테고리 매핑 (업종코드 기반)
             PlaceCategory group = mapIndustryCodeToPlaceCategory(csvData.getIndustryCode());
@@ -236,6 +307,7 @@ public class CsvImportService {
                     .information(information)
                     .group(group)
                     .category(category)
+                    .dataSource(DataSource.GOOGLE)
                     .build();
 
             Place savedPlace = placeRepository.save(place);
@@ -246,7 +318,7 @@ public class CsvImportService {
                 int photoOrder = 0;
 
                 for (GooglePlaceResponse.Photo photo : googleCandidate.getPhotos()) {
-                    if (photoOrder >= 5) break; // 최대 5장까지만
+                    if (photoOrder >= 20) break; // 최대 20장까지만
 
                     String photoUrl = googlePlaceService.getPhotoUrl(photo.getPhotoReference(), 800);
 
@@ -301,10 +373,10 @@ public class CsvImportService {
                     : csvData.getJibunAddress();
 
             // 요약 정보 (상권업종소분류명)
-            String summary = csvData.getIndustryName();
+            String summary = cleanHtmlTags(csvData.getIndustryName());
 
             // 상세 정보 (업종명)
-            String information = csvData.getIndustryName();
+            String information = cleanHtmlTags(csvData.getIndustryName());
 
             // 카테고리 매핑 (업종코드 기반)
             PlaceCategory group = mapIndustryCodeToPlaceCategory(csvData.getIndustryCode());
@@ -325,6 +397,7 @@ public class CsvImportService {
                     .information(information)
                     .group(group)
                     .category(category)
+                    .dataSource(DataSource.CSV)
                     .build();
 
             return placeRepository.save(place);
@@ -411,5 +484,45 @@ public class CsvImportService {
         }
 
         return Category.문화_체험;
+    }
+
+    /**
+     * HTML 태그 및 포맷 문자열 제거
+     * @param text 원본 텍스트
+     * @return 정제된 텍스트
+     */
+    private String cleanHtmlTags(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+
+        // HTML 태그 제거 (<br>, <p>, <div> 등)
+        String cleaned = text.replaceAll("<br\\s*/?>", "\n")  // <br>을 줄바꿈으로
+                             .replaceAll("<[^>]+>", "");       // 나머지 HTML 태그 제거
+
+        // HTML 엔티티 변환
+        cleaned = cleaned.replace("&nbsp;", " ")
+                         .replace("&amp;", "&")
+                         .replace("&lt;", "<")
+                         .replace("&gt;", ">")
+                         .replace("&quot;", "\"")
+                         .replace("&#39;", "'")
+                         .replace("&apos;", "'");
+
+        // 연속된 줄바꿈을 2개까지만 허용 (단락 구분 유지)
+        cleaned = cleaned.replaceAll("\n{3,}", "\n\n");
+
+        // 각 줄의 앞뒤 공백 제거
+        cleaned = cleaned.lines()
+                         .map(String::trim)
+                         .collect(java.util.stream.Collectors.joining("\n"));
+
+        // 연속된 공백을 하나로
+        cleaned = cleaned.replaceAll(" +", " ");
+
+        // 전체 앞뒤 공백 제거
+        cleaned = cleaned.trim();
+
+        return cleaned;
     }
 }
