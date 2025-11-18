@@ -22,7 +22,7 @@ public class PopularSearch extends BaseEntity {
     @Column(name = "popular_search_id")
     private Long id;
 
-    @Column(name = "rank", nullable = false)
+    @Column(name = "`rank`", nullable = false)
     private Integer rank;
 
     @Column(name = "keyword", nullable = false, length = 100)

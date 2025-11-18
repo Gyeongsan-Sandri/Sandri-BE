@@ -16,7 +16,23 @@ import java.util.List;
 public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     boolean existsByName(String name);
-    
+
+    /**
+     * 이름과 주소로 중복 체크
+     * @param name 장소 이름
+     * @param address 주소
+     * @return 존재 여부
+     */
+    boolean existsByNameAndAddress(String name, String address);
+
+    /**
+     * 이름과 주소로 장소 조회
+     * @param name 장소 이름
+     * @param address 주소
+     * @return 장소 (없으면 Optional.empty())
+     */
+    java.util.Optional<Place> findByNameAndAddress(String name, String address);
+
     /**
      * 이름으로 장소 조회
      * @param name 장소 이름
