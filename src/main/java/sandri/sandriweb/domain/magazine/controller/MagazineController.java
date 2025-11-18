@@ -11,10 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.magazine.dto.MagazineDetailResponseDto;
 import sandri.sandriweb.domain.magazine.dto.MagazineListCursorResponseDto;
-<<<<<<< HEAD
 import sandri.sandriweb.domain.magazine.dto.MagazinePlaceThumbnailDto;
-=======
->>>>>>> feature/review-api
 import sandri.sandriweb.domain.magazine.service.MagazineService;
 import sandri.sandriweb.domain.place.dto.SimplePlaceDto;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
