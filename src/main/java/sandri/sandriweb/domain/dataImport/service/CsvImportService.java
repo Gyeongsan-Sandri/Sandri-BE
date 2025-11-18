@@ -280,12 +280,14 @@ public class CsvImportService {
                     ? placeDetails.getDisplayName().getText()
                     : fullName;
 
-            // 주소 (Google 우선)
-            String address = placeDetails.getFormattedAddress() != null && !placeDetails.getFormattedAddress().isEmpty()
-                    ? placeDetails.getFormattedAddress()
-                    : (csvData.getRoadAddress() != null && !csvData.getRoadAddress().isEmpty()
-                        ? csvData.getRoadAddress()
-                        : csvData.getJibunAddress());
+            // 주소 (Google formattedAddress만 사용, 없으면 실패)
+            String address = null;
+            if (placeDetails.getFormattedAddress() != null && !placeDetails.getFormattedAddress().isEmpty()) {
+                address = placeDetails.getFormattedAddress();
+            } else {
+                log.warn("Google Place Details에 formattedAddress가 없음: name={}", name);
+                return null;
+            }
 
             // 요약 정보 (Google editorialSummary 우선, 없으면 CSV의 상권업종소분류명)
             String summary = null;

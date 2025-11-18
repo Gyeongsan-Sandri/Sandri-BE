@@ -206,15 +206,19 @@ public class GBGSDataImportService {
                 return ProcessResult.FAILED;
             }
 
-            // Google 데이터에서 name과 address 추출
+            // Google 데이터에서 name과 address 추출 (address는 Google에서만 사용)
             String placeName = item.getTitle();
-            String placeAddress = item.getAddress();
+            String placeAddress = null; // Google formattedAddress만 사용
 
             if (placeDetails.getDisplayName() != null && placeDetails.getDisplayName().getText() != null) {
                 placeName = placeDetails.getDisplayName().getText();
             }
             if (placeDetails.getFormattedAddress() != null && !placeDetails.getFormattedAddress().isEmpty()) {
                 placeAddress = placeDetails.getFormattedAddress();
+            } else {
+                // Google formattedAddress가 없으면 실패 처리
+                log.warn("Google Place Details에 formattedAddress가 없음: placeId={}", placeId);
+                return ProcessResult.FAILED;
             }
 
             // 기존 장소 확인 (이름 + 주소)
@@ -349,10 +353,14 @@ public class GBGSDataImportService {
                     ? placeDetails.getDisplayName().getText()
                     : item.getTitle();
 
-            // 주소 (Google 우선, 없으면 외부 API 사용)
-            String address = placeDetails.getFormattedAddress() != null && !placeDetails.getFormattedAddress().isEmpty()
-                    ? placeDetails.getFormattedAddress()
-                    : item.getAddress();
+            // 주소 (Google formattedAddress만 사용, 없으면 실패)
+            String address = null;
+            if (placeDetails.getFormattedAddress() != null && !placeDetails.getFormattedAddress().isEmpty()) {
+                address = placeDetails.getFormattedAddress();
+            } else {
+                log.warn("Google Place Details에 formattedAddress가 없음: name={}", name);
+                return null;
+            }
 
             // 요약 정보 (Google editorialSummary 우선)
             String summary = null;
