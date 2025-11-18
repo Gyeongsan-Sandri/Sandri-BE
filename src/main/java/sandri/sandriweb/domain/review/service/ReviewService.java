@@ -407,7 +407,7 @@ public class ReviewService {
         // CursorResponseDto 생성
         return CursorResponseDto.<D>builder()
                 .content(content)
-                .size(size)
+                .size(content.size())
                 .nextCursor(nextCursor)
                 .hasNext(hasNext)
                 .totalCount(totalCount)

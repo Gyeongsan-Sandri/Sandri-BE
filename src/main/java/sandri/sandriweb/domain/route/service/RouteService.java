@@ -25,6 +25,7 @@ import sandri.sandriweb.domain.place.repository.PlacePhotoRepository;
 import sandri.sandriweb.domain.place.entity.PlacePhoto;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -46,10 +47,15 @@ public class RouteService {
     
     @Value("${app.base-url}")
     private String baseUrl;
+
+    private static final int HOT_RECENT_DAYS = 7;
+    private static final double HOT_ALPHA = 0.7;
     
     @Transactional
     public ApiResponseDto<RouteResponseDto> createRoute(CreateRouteRequestDto request, User creator) {
         try {
+            log.info("루트 생성 요청 상세: 제목={}, 공개여부 요청값={}", request.getTitle(), request.isPublic());
+            
             // 이미지 URL 처리: 사용자가 제공하지 않으면 첫 번째 장소 사진 사용
             String imageUrl = normalizeImageUrl(request.getImageUrl());
             if (imageUrl == null && request.getLocations() != null && !request.getLocations().isEmpty()) {
@@ -64,6 +70,8 @@ public class RouteService {
                     .isPublic(request.isPublic())
                     .imageUrl(imageUrl)
                     .build();
+            
+            log.info("루트 엔티티 생성: 제목={}, 공개여부={}", route.getTitle(), route.isPublic());
             
             // 위치 정보 추가
             if (request.getLocations() != null && !request.getLocations().isEmpty()) {
@@ -232,6 +240,9 @@ public class RouteService {
     public boolean toggleLike(Long routeId, Long userId) {
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new RuntimeException("루트를 찾을 수 없습니다."));
+        
+        log.info("루트 좋아요 토글: 루트ID={}, 제목={}, 공개여부={}, 사용자ID={}", 
+                routeId, route.getTitle(), route.isPublic(), userId);
 
         if (!userRepository.existsById(userId)) {
             throw new RuntimeException("사용자를 찾을 수 없습니다.");
@@ -242,10 +253,12 @@ public class RouteService {
                     if (userRoute.isEnabled()) {
                         userRoute.disable();
                         userRouteRepository.save(userRoute);
+                        log.info("루트 좋아요 취소: 루트ID={}", routeId);
                         return false;
                     } else {
                         userRoute.enable();
                         userRouteRepository.save(userRoute);
+                        log.info("루트 좋아요 재활성화: 루트ID={}", routeId);
                         return true;
                     }
                 })
@@ -256,6 +269,7 @@ public class RouteService {
                             .route(route)
                             .build();
                     userRouteRepository.save(newUserRoute);
+                    log.info("루트 좋아요 신규 등록: 루트ID={}, enabled={}", routeId, newUserRoute.isEnabled());
                     return true;
                 });
     }
@@ -515,6 +529,63 @@ public class RouteService {
     private boolean hasRouteAccess(Route route, User user) {
         return route.getCreator().getId().equals(user.getId()) ||
                 participantRepository.existsByRouteAndUser(route, user);
+    }
+
+    /**
+     * HOT 루트 조회 (공개 루트만)
+     */
+    public List<HotRouteDto> getHotRoutes(int limit) {
+        int fetchSize = Math.min(Math.max(limit, 1), 20);
+
+        List<Object[]> ranking = userRouteRepository.findHotRoutes(fetchSize, HOT_RECENT_DAYS, HOT_ALPHA);
+        log.info("HOT 루트 쿼리 결과: {} 개", ranking.size());
+        if (ranking.isEmpty()) {
+            log.warn("HOT 루트 없음 - 공개 루트가 없거나 좋아요가 없습니다");
+            return List.of();
+        }
+
+        List<Long> routeIds = ranking.stream()
+                .map(row -> ((Number) row[0]).longValue())
+                .collect(Collectors.toList());
+
+        Map<Long, Route> routeMap = routeRepository.findAllById(routeIds).stream()
+                .collect(Collectors.toMap(Route::getId, route -> route));
+
+        List<HotRouteDto> hotRoutes = new ArrayList<>();
+        int rank = 1;
+        for (Object[] row : ranking) {
+            Long routeId = ((Number) row[0]).longValue();
+            Route route = routeMap.get(routeId);
+            if (route == null) {
+                log.warn("루트 ID {} 를 찾을 수 없습니다", routeId);
+                continue;
+            }
+
+            Long totalLikes = row[1] != null ? ((Number) row[1]).longValue() : 0L;
+            Long recentLikes = row[2] != null ? ((Number) row[2]).longValue() : 0L;
+            
+            log.info("HOT 루트 순위 {}: ID={}, 제목={}, 공개={}, 총좋아요={}, 최근좋아요={}", 
+                    rank, routeId, route.getTitle(), route.isPublic(), totalLikes, recentLikes);
+
+            hotRoutes.add(HotRouteDto.builder()
+                    .rank(rank++)
+                    .routeId(route.getId())
+                    .title(route.getTitle())
+                    .startDate(route.getStartDate())
+                    .endDate(route.getEndDate())
+                    .imageUrl(route.getImageUrl())
+                    .creatorId(route.getCreator().getId())
+                    .creatorNickname(route.getCreator().getNickname())
+                    .totalLikes(totalLikes)
+                    .recentLikes(recentLikes)
+                    .build());
+
+            if (hotRoutes.size() >= limit) {
+                break;
+            }
+        }
+
+        return hotRoutes;
     }
 }
 
