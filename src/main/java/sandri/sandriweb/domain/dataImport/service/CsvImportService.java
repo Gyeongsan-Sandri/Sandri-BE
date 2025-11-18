@@ -52,15 +52,16 @@ public class CsvImportService {
     /**
      * CSV 파일에서 경산시 매장 정보를 추출하여 DB에 저장
      * @param csvFile CSV 파일
+     * @param mode "insert" (신규만 추가) 또는 "upsert" (업데이트 포함)
      * @return 처리 결과 메시지
      */
-    public String importStoresFromCsv(MultipartFile csvFile) {
+    public String importStoresFromCsv(MultipartFile csvFile, String mode) {
         int totalImported = 0;
         int totalFailed = 0;
         int totalSkipped = 0;
         int totalFiltered = 0;
 
-        log.info("CSV 파일 임포트 시작: filename={}", csvFile.getOriginalFilename());
+        log.info("CSV 파일 임포트 시작: filename={}, mode={}", csvFile.getOriginalFilename(), mode);
 
         try {
             // CSV 파일 파싱
@@ -79,7 +80,7 @@ public class CsvImportService {
             // 각 매장 처리
             for (StoreCsvDto store : filteredStores) {
                 try {
-                    boolean success = self.processStore(store);  // Self-injection으로 호출
+                    boolean success = self.processStore(store, mode);  // Self-injection으로 호출
                     if (success) {
                         totalImported++;
                     } else {
@@ -91,7 +92,7 @@ public class CsvImportService {
                 }
             }
 
-            String result = String.format("CSV 임포트 완료 - 성공: %d, 실패: %d, 중복 스킵: %d, 경산시 외 제외: %d",
+            String result = String.format("CSV 임포트 완료 - 성공: %d, 실패: %d, 유지: %d, 경산시 외 제외: %d",
                 totalImported, totalFailed, totalSkipped, totalFiltered);
             log.info(result);
             return result;
@@ -104,10 +105,11 @@ public class CsvImportService {
 
     /**
      * 개별 매장 처리 (독립적인 트랜잭션)
+     * @param mode "insert" (신규만 추가) 또는 "upsert" (업데이트 포함)
      * @return true: 저장 성공, false: 스킵
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public boolean processStore(StoreCsvDto store) {
+    public boolean processStore(StoreCsvDto store, String mode) {
         // 상호명 생성 (지점명 포함)
         String fullName = store.getStoreName();
         if (store.getBranchName() != null && !store.getBranchName().isEmpty()) {
@@ -136,15 +138,22 @@ public class CsvImportService {
         }
 
         if (existingPlace.isPresent()) {
-            // 기존 장소가 있으면 PATCH (업데이트)
-            Place place = existingPlace.get();
-            boolean updated = updatePlaceFromCsv(place, store, placeDetails);
-            if (updated) {
-                log.info("장소 업데이트 성공 (PATCH): {}", fullName);
-                return true;
-            } else {
-                log.debug("장소 업데이트 불필요 (데이터 동일): {}", fullName);
+            // 기존 장소가 있음
+            if ("insert".equals(mode)) {
+                // insert 모드: 업데이트 안 함, 유지
+                log.debug("기존 장소 유지 (insert 모드): {}", fullName);
                 return false;
+            } else {
+                // upsert 모드: 업데이트 시도
+                Place place = existingPlace.get();
+                boolean updated = updatePlaceFromCsv(place, store, placeDetails);
+                if (updated) {
+                    log.info("장소 업데이트 성공 (PATCH): {}", fullName);
+                    return true;
+                } else {
+                    log.debug("장소 업데이트 불필요 (데이터 동일): {}", fullName);
+                    return false;
+                }
             }
         } else {
             // 새로운 장소면 POST (생성)

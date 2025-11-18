@@ -67,15 +67,16 @@ public class GBGSDataImportService {
 
     /**
      * 외부 API에서 데이터를 가져와 Google Place API로 검색 후 DB에 저장
+     * @param mode "insert" (신규만 추가) 또는 "upsert" (업데이트 포함)
      * @return 처리 결과 메시지
      */
-    public String importPlacesFromExternalApi() {
+    public String importPlacesFromExternalApi(String mode) {
         int totalImported = 0;
         int totalFailed = 0;
         int totalSkipped = 0;
         int apiCallFailures = 0; // API 호출 실패 카운트
 
-        log.info("데이터 임포트 시작");
+        log.info("데이터 임포트 시작 - mode: {}", mode);
 
         try {
             // 각 카테고리 코드별로 순회
@@ -119,7 +120,7 @@ public class GBGSDataImportService {
                     // 4단계: 각 항목 처리
                     for (GbgsTourApiResponse.TourItem item : items) {
                         try {
-                            ProcessResult result = self.processPlace(item, code);  // Self-injection으로 호출
+                            ProcessResult result = self.processPlace(item, code, mode);  // Self-injection으로 호출
                             if (result == ProcessResult.IMPORTED) {
                                 totalImported++;
                             } else if (result == ProcessResult.SKIPPED) {
@@ -148,7 +149,7 @@ public class GBGSDataImportService {
             if (apiCallFailures > 0) {
                 // 일부 카테고리 API 호출 실패
                 String result = String.format(
-                    "데이터 임포트 부분 완료 - 성공: %d, 실패: %d, 스킵: %d, API 호출 실패: %d개 카테고리",
+                    "데이터 임포트 부분 완료 - 성공: %d, 실패: %d, 유지: %d, API 호출 실패: %d개 카테고리",
                     totalImported, totalFailed, totalSkipped, apiCallFailures
                 );
                 log.warn(result);
@@ -156,7 +157,7 @@ public class GBGSDataImportService {
             }
 
             // 정상 완료
-            String result = String.format("데이터 임포트 완료 - 성공: %d, 실패: %d, 스킵: %d",
+            String result = String.format("데이터 임포트 완료 - 성공: %d, 실패: %d, 유지: %d",
                 totalImported, totalFailed, totalSkipped);
             log.info(result);
             return result;
@@ -172,10 +173,11 @@ public class GBGSDataImportService {
 
     /**
      * 개별 장소 처리 (독립적인 트랜잭션)
+     * @param mode "insert" (신규만 추가) 또는 "upsert" (업데이트 포함)
      * @return 처리 결과
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public ProcessResult processPlace(GbgsTourApiResponse.TourItem item, int categoryCode) {
+    public ProcessResult processPlace(GbgsTourApiResponse.TourItem item, int categoryCode, String mode) {
         try {
             // 1단계: Google Find Place API로 place_id 검색
             GooglePlaceResponse googlePlace = googlePlaceService.findPlace(
@@ -219,15 +221,22 @@ public class GBGSDataImportService {
             java.util.Optional<Place> existingPlace = placeRepository.findByNameAndAddress(placeName, placeAddress);
 
             if (existingPlace.isPresent()) {
-                // 기존 장소가 있으면 PATCH (업데이트)
-                Place place = existingPlace.get();
-                boolean updated = updatePlaceFromGbgs(place, item, placeDetails, categoryCode);
-                if (updated) {
-                    log.info("장소 업데이트 성공 (PATCH): {}", placeName);
-                    return ProcessResult.IMPORTED;
-                } else {
-                    log.debug("장소 업데이트 불필요 (데이터 동일): {}", placeName);
+                // 기존 장소가 있음
+                if ("insert".equals(mode)) {
+                    // insert 모드: 업데이트 안 함, 유지
+                    log.debug("기존 장소 유지 (insert 모드): {}", placeName);
                     return ProcessResult.SKIPPED;
+                } else {
+                    // upsert 모드: 업데이트 시도
+                    Place place = existingPlace.get();
+                    boolean updated = updatePlaceFromGbgs(place, item, placeDetails, categoryCode);
+                    if (updated) {
+                        log.info("장소 업데이트 성공 (PATCH): {}", placeName);
+                        return ProcessResult.IMPORTED;
+                    } else {
+                        log.debug("장소 업데이트 불필요 (데이터 동일): {}", placeName);
+                        return ProcessResult.SKIPPED;
+                    }
                 }
             } else {
                 // 새로운 장소면 POST (생성)

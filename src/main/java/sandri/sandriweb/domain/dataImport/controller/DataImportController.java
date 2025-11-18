@@ -25,13 +25,21 @@ public class DataImportController {
     @Operation(summary = "경산시 장소 데이터 임포트",
                description = "경산시 관광 API에서 장소 목록을 가져온 후, Google Place API로 검색하여 DB에 저장합니다. " +
                              "코드 100(음식), 200(숙박), 300(관광명소), 400(문화재/역사)를 모두 순회합니다. " +
-                             "이미 존재하는 장소는 스킵됩니다. " +
+                             "mode=insert (기본값): 신규 장소만 추가, 기존 장소는 건드리지 않음. " +
+                             "mode=upsert: 신규 추가 + 기존 장소 업데이트. " +
                              "주의: 이 작업은 시간이 오래 걸릴 수 있습니다.")
-    public ResponseEntity<ApiResponseDto<String>> importPlaces() {
-        log.info("장소 데이터 임포트 요청");
+    public ResponseEntity<ApiResponseDto<String>> importPlaces(
+            @RequestParam(value = "mode", defaultValue = "insert") String mode) {
+        log.info("장소 데이터 임포트 요청 - mode: {}", mode);
+
+        // mode 검증
+        if (!mode.equals("insert") && !mode.equals("upsert")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("mode는 'insert' 또는 'upsert'만 가능합니다."));
+        }
 
         try {
-            String result = GBGSDataImportService.importPlacesFromExternalApi();
+            String result = GBGSDataImportService.importPlacesFromExternalApi(mode);
             return ResponseEntity.ok(ApiResponseDto.success(result));
 
         } catch (RuntimeException e) {
@@ -57,13 +65,21 @@ public class DataImportController {
                description = "CSV 파일을 업로드하여 경산시(경상북도) 매장 정보를 DB에 저장합니다. " +
                              "Google Place API로 검색하여 정보를 찾으면 Google 데이터를 우선 사용하고, " +
                              "찾지 못하면 CSV 데이터를 직접 사용하여 저장합니다. " +
-                             "이미 존재하는 장소(이름+주소 동일)는 스킵됩니다.")
+                             "mode=insert (기본값): 신규 장소만 추가, 기존 장소는 건드리지 않음. " +
+                             "mode=upsert: 신규 추가 + 기존 장소 업데이트.")
     public ResponseEntity<ApiResponseDto<String>> importFromCsv(
-            @RequestParam("file") MultipartFile file) {
-        log.info("CSV 데이터 임포트 요청: filename={}", file.getOriginalFilename());
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "mode", defaultValue = "insert") String mode) {
+        log.info("CSV 데이터 임포트 요청: filename={}, mode={}", file.getOriginalFilename(), mode);
+
+        // mode 검증
+        if (!mode.equals("insert") && !mode.equals("upsert")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("mode는 'insert' 또는 'upsert'만 가능합니다."));
+        }
 
         try {
-            String result = csvImportService.importStoresFromCsv(file);
+            String result = csvImportService.importStoresFromCsv(file, mode);
             return ResponseEntity.ok(ApiResponseDto.success(result));
 
         } catch (Exception e) {
