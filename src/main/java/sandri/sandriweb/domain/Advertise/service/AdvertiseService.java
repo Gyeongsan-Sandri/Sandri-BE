@@ -8,6 +8,7 @@ import sandri.sandriweb.domain.advertise.dto.AdDto;
 import sandri.sandriweb.domain.advertise.dto.AdResponseDto;
 import sandri.sandriweb.domain.advertise.dto.CreateOfficialAdRequestDto;
 import sandri.sandriweb.domain.advertise.dto.CreatePrivateAdRequestDto;
+import sandri.sandriweb.domain.advertise.entity.Ad;
 import sandri.sandriweb.domain.advertise.entity.OfficialAd;
 import sandri.sandriweb.domain.advertise.entity.PrivateAd;
 import sandri.sandriweb.domain.advertise.repository.OfficialAdRepository;
@@ -65,9 +66,9 @@ public class AdvertiseService {
     }
 
     /**
-     * OfficialAd를 AdDto로 변환
+     * Ad를 AdDto로 변환 (공통 메소드)
      */
-    private AdDto convertToAdDto(OfficialAd ad) {
+    private AdDto convertToAdDto(Ad ad) {
         return AdDto.builder()
                 .adId(ad.getId())
                 .imageUrl(ad.getImageUrl())
@@ -123,17 +124,5 @@ public class AdvertiseService {
         return savedAd.getId();
     }
 
-    /**
-     * PrivateAd를 AdDto로 변환
-     */
-    private AdDto convertToAdDto(PrivateAd ad) {
-        return AdDto.builder()
-                .adId(ad.getId())
-                .imageUrl(ad.getImageUrl())
-                .title(ad.getTitle())
-                .description(ad.getDescription())
-                .linkUrl(ad.getLinkUrl())
-                .build();
-    }
 }
 

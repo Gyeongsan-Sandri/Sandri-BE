@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import sandri.sandriweb.domain.place.entity.Place;
+import sandri.sandriweb.domain.place.enums.Category;
 
 import java.util.List;
 
@@ -38,6 +39,14 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
      * @return 장소 (없으면 Optional.empty())
      */
     java.util.Optional<Place> findByName(String name);
+
+    /**
+     * 여러 이름으로 장소 일괄 조회 (N+1 문제 방지)
+     * @param names 장소 이름 목록
+     * @return 이름을 키로 하는 장소 Map
+     */
+    @Query("SELECT p FROM Place p WHERE p.name IN :names AND p.enabled = true")
+    List<Place> findByNameIn(@Param("names") java.util.Set<String> names);
 
     // 근처 장소 조회 (반경 내)
     // 참고: ST_Distance_Sphere는 MySQL/MariaDB용 함수입니다.
@@ -109,10 +118,47 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
            "           GROUP BY place_id) AS likes ON p.place_id = likes.place_id " +
            "WHERE p.category = :categoryName " +
            "AND p.enabled = true " +
-           "ORDER BY COALESCE(likes.like_count, 0) DESC, p.created_at DESC " +
+           "ORDER BY COALESCE(likes.like_count, 0) DESC, p.created_at DESC, p.place_id DESC " +
            "LIMIT :limit", nativeQuery = true)
     List<Place> findByCategoryOrderByLikeCountDesc(@Param("categoryName") String categoryName,
                                                     @Param("limit") int limit);
+
+    /**
+     * 카테고리별 장소 조회 (커서 기반 페이징, 좋아요 많은 순)
+     * @param categoryName 카테고리 이름
+     * @param lastLikeCount 마지막 장소의 좋아요 수
+     * @param lastCreatedAt 마지막 장소의 생성 시간
+     * @param lastPlaceId 마지막 장소 ID
+     * @param limit 조회할 개수
+     * @return 좋아요 많은 순으로 정렬된 장소 리스트 (커서 이후)
+     */
+    @Query(value = "SELECT p.* FROM places p " +
+           "LEFT JOIN (SELECT place_id, COUNT(*) as like_count " +
+           "           FROM place_likes " +
+           "           WHERE enabled = true " +
+           "           GROUP BY place_id) AS likes ON p.place_id = likes.place_id " +
+           "WHERE p.category = :categoryName " +
+           "AND p.enabled = true " +
+           "AND (COALESCE(likes.like_count, 0) < :lastLikeCount " +
+           "     OR (COALESCE(likes.like_count, 0) = :lastLikeCount AND p.created_at < :lastCreatedAt) " +
+           "     OR (COALESCE(likes.like_count, 0) = :lastLikeCount AND p.created_at = :lastCreatedAt AND p.place_id < :lastPlaceId)) " +
+           "ORDER BY COALESCE(likes.like_count, 0) DESC, p.created_at DESC, p.place_id DESC " +
+           "LIMIT :limit", nativeQuery = true)
+    List<Place> findByCategoryOrderByLikeCountDescWithCursor(
+            @Param("categoryName") String categoryName,
+            @Param("lastLikeCount") long lastLikeCount,
+            @Param("lastCreatedAt") java.time.LocalDateTime lastCreatedAt,
+            @Param("lastPlaceId") Long lastPlaceId,
+            @Param("limit") int limit);
+
+    /**
+     * 장소 ID로 좋아요 수 조회
+     * @param placeId 장소 ID
+     * @return 좋아요 수
+     */
+    @Query(value = "SELECT COUNT(*) FROM place_likes " +
+           "WHERE place_id = :placeId AND enabled = true", nativeQuery = true)
+    long getLikeCountByPlaceId(@Param("placeId") Long placeId);
 
     /**
      * 키워드로 장소 검색 (이름, 주소, 요약 정보에서 검색)
@@ -131,7 +177,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
     /**
      * 키워드로 장소 검색 (카테고리 필터 포함)
      * @param keyword 검색 키워드
-     * @param category 카테고리 (선택사항)
+     * @param category 카테고리 enum (선택사항)
      * @param pageable 페이징 정보
      * @return 검색 결과
      */
@@ -143,7 +189,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
            "AND (:category IS NULL OR p.category = :category) " +
            "ORDER BY p.name ASC")
     Page<Place> searchByKeywordAndCategory(@Param("keyword") String keyword,
-                                           @Param("category") String category,
+                                           @Param("category") Category category,
                                            Pageable pageable);
 
 }

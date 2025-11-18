@@ -247,12 +247,46 @@ POST http://localhost:8080/api/places/1/like
 ```
 **인증 필요**: 로그인 필수
 
+**설명:**
+- 관광지 상세 페이지에서 호출합니다.
+- 장소에 좋아요를 추가하거나 취소합니다. 이미 좋아요한 경우 취소되고, 좋아요하지 않은 경우 추가됩니다.
+
 **응답 예시:**
 ```json
 {
   "success": true,
   "message": "좋아요가 추가되었습니다.",
   "data": true
+}
+```
+
+### 2.6 HOT 관광지 조회
+```
+GET http://localhost:8080/api/places/hot
+```
+
+**설명:**
+- 좋아요 수와 최근 활동 가중치를 기반으로 인기 관광지를 순위대로 반환합니다.
+- 상위 5개의 HOT 관광지를 반환합니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "placeId": 1,
+      "name": "경주 불국사",
+      "thumbnailUrl": "https://s3.../photo.jpg",
+      "address": "경상북도 경주시 불국로 385",
+      "groupName": "관광지",
+      "categoryName": "역사/전통",
+      "rating": 4.5,
+      "likeCount": 150,
+      "hotScore": 95.5
+    }
+  ]
 }
 ```
 
@@ -507,6 +541,12 @@ Content-Type: application/json
   - `photoUrl` (required): AWS S3에 업로드된 사진/영상 URL
   - `order` (required): 사진 순서 (0부터 시작)
 
+**설명:**
+- 리뷰 작성 시 포인트가 자동으로 적립됩니다.
+  - 사진이 포함된 리뷰: 사진 리뷰 포인트 적립
+  - 사진이 없는 리뷰: 리뷰 포인트 적립
+- 포인트 적립 실패 시에도 리뷰 작성은 정상적으로 완료됩니다.
+
 **응답 예시:**
 ```json
 {
@@ -516,13 +556,20 @@ Content-Type: application/json
 }
 ```
 
-**참고**: 작성한 리뷰의 상세 정보가 필요하면 `GET /api/me/reviews/{reviewId}` API를 호출하세요.
+**참고**: 
+- 작성한 리뷰의 상세 정보가 필요하면 `GET /api/me/reviews/{reviewId}` API를 호출하세요.
+- 리뷰 작성으로 적립된 포인트는 `GET /api/me/points/histories?type=EARN` API로 확인할 수 있습니다.
 
 ### 3.5 내가 작성한 리뷰 상세 조회(! 활용처는 X, 리뷰 수정용)
 ```
 GET http://localhost:8080/api/me/reviews/1
 ```
 **인증 필요**: 로그인 필수
+
+**설명:**
+- 리뷰 출력/리뷰 수정 시 호출합니다.
+- 리뷰 ID, 리뷰 내용, 별점, 작성 일시, 사진 정보 리스트를 반환합니다.
+- 작성자 정보는 null로 반환됩니다.
 
 ### 3.6 내가 작성한 리뷰 목록 조회 (커서 기반 페이징)
 ```
@@ -603,10 +650,13 @@ Content-Type: application/json
 }
 ```
 
+**설명:**
+- 마이페이지: 내 리뷰 페이지에서 리뷰 수정 시 호출합니다.
+- 별점, 리뷰 내용, 사진(순서, finalUrl)을 전송하면 리뷰를 수정하고 수정된 리뷰 ID를 반환합니다.
+- finalUrl은 프론트에서 getPresignedUrls 호출 시 발급됩니다. 업로드에 성공한 finalUrl을 사용해주세요.
+- 기존 사진 엔티티는 모두 삭제되고 새로운 사진으로 교체되지만, S3에 저장된 실제 파일은 삭제되지 않습니다.
+
 **참고**: 
-- 사진 정보(photos)가 포함된 경우, order 값에 따라 기존 사진을 업데이트하거나 새로 생성하며, photoUrl이 빈 문자열("")이면 해당 order의 사진을 비활성화합니다.
-- 요청에 없는 order의 사진은 유지됩니다 (비활성화되지 않음).
-- S3에 저장된 실제 파일은 삭제되지 않습니다.
 - 수정된 리뷰의 상세 정보가 필요하면 `GET /api/me/reviews/{reviewId}` API를 호출하세요.
 
 ### 3.8 리뷰 삭제
@@ -614,6 +664,10 @@ Content-Type: application/json
 DELETE http://localhost:8080/api/me/reviews/1
 ```
 **인증 필요**: 로그인 필수
+
+**설명:**
+- 마이페이지: 내 리뷰 페이지에서 리뷰 삭제 시 호출합니다.
+- 연결된 사진 엔티티는 삭제되지만, S3에 저장된 실제 파일은 삭제되지 않습니다.
 
 **응답 예시:**
 ```json
@@ -624,13 +678,238 @@ DELETE http://localhost:8080/api/me/reviews/1
 }
 ```
 
-**참고**: 연결된 사진 엔티티는 삭제되지만, S3에 저장된 실제 파일은 삭제되지 않습니다.
+---
+
+## 4. 방문 기록 (Visit History)
+
+### 4.1 장소 방문 확인 및 기록
+```
+POST http://localhost:8080/api/me/visits/places/1
+Content-Type: application/json
+
+{
+  "latitude": 35.8251,
+  "longitude": 128.7405
+}
+```
+**인증 필요**: 로그인 필수
+
+**Path Parameters:**
+- `placeId` (required): 장소 ID
+
+**Request Body:**
+- `latitude` (required): 현재 사용자 GPS 위도 (-90 ~ 90)
+- `longitude` (required): 현재 사용자 GPS 경도 (-180 ~ 180)
+
+**설명:**
+- 홈: 오늘 일정: 방문 확정하기에서 호출합니다.
+- 사용자의 현재 GPS 위치와 장소 위치의 거리를 계산하여 1km 이내인지 확인합니다.
+- 조건에 맞으면 방문 기록을 저장하고 방문 여부를 반환합니다.
+- 방문 성공 시 포인트가 자동으로 적립됩니다 (방문 포인트).
+
+**응답 예시 (방문 성공):**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": {
+    "visited": true,
+    "visitHistoryId": 1
+  }
+}
+```
+
+**응답 예시 (방문 실패 - 거리 초과):**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": {
+    "visited": false,
+    "visitHistoryId": null
+  }
+}
+```
+
+**에러 응답:**
+- `400 Bad Request`: 좌표 범위 초과, 필수 값 누락 등
+- `401 Unauthorized`: 인증 필요
+- `404 Not Found`: 사용자 또는 장소를 찾을 수 없음
+
+### 4.2 오늘 일정 장소 조회
+```
+GET http://localhost:8080/api/me/visits/places
+```
+**인증 필요**: 로그인 필수
+
+**설명:**
+- 홈 화면: 오늘 일정에서 호출합니다.
+- 로그인한 사용자가 참여한 루트 중 오늘 날짜에 해당하는 장소 목록을 조회합니다.
+- 각 장소는 썸네일, 장소 이름, 한글 주소를 포함하며, 여행의 총 장소 개수와 해당 여행지의 방문 순서도 함께 반환됩니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "placeInfo": {
+        "thumbnail": "https://s3.../photo.jpg",
+        "placeName": "경복궁",
+        "address": "서울특별시 종로구 사직로 161"
+      },
+      "totalPlaceCount": 5,
+      "visitOrder": 1
+    },
+    {
+      "placeInfo": {
+        "thumbnail": "https://s3.../photo2.jpg",
+        "placeName": "경복궁",
+        "address": "서울특별시 종로구 사직로 161"
+      },
+      "totalPlaceCount": 5,
+      "visitOrder": 2
+    }
+  ]
+}
+```
+
+**에러 응답:**
+- `401 Unauthorized`: 인증 필요
+- `404 Not Found`: 사용자를 찾을 수 없음
+
+### 4.3 방문 기록 목록 조회
+```
+GET http://localhost:8080/api/me/visits/history
+```
+**인증 필요**: 로그인 필수
+
+**설명:**
+- 마이페이지: 방문 기록(내 여행) 페이지에서 호출합니다.
+- 로그인한 사용자의 모든 방문 기록을 조회합니다.
+- 각 방문 기록은 장소 정보(장소 ID, 장소 이름, 첫 번째 사진 URL), 방문 날짜, 방문 요일, 리뷰 작성 여부를 포함합니다.
+- 최신순으로 정렬되어 반환됩니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "visitHistoryId": 1,
+      "placeId": 1,
+      "placeName": "경복궁",
+      "firstPhotoUrl": "https://s3.../photo.jpg",
+      "visitedAt": "2024-11-05",
+      "dayOfWeek": "화",
+      "hasReview": true
+    },
+    {
+      "visitHistoryId": 2,
+      "placeId": 2,
+      "placeName": "경주 석굴암",
+      "firstPhotoUrl": "https://s3.../photo2.jpg",
+      "visitedAt": "2024-11-04",
+      "dayOfWeek": "월",
+      "hasReview": false
+    }
+  ]
+}
+```
+
+**에러 응답:**
+- `401 Unauthorized`: 인증 필요
+- `404 Not Found`: 사용자를 찾을 수 없음
 
 ---
 
-## 4. 매거진 (Magazine)
+## 5. 포인트 (Point)
 
-### 4.1 매거진 상세 조회
+### 5.1 포인트 히스토리 목록 조회
+```
+GET http://localhost:8080/api/me/points/histories?type=ALL
+```
+**인증 필요**: 로그인 필수
+
+**Query Parameters:**
+- `type` (optional, default: ALL): 조회 타입
+  - `ALL`: 전체 조회 (기본값)
+  - `EARN`: 적립 포인트만 조회
+  - `USE`: 사용 포인트만 조회
+
+**설명:**
+- 로그인한 사용자의 포인트 적립/사용 내역 목록을 조회합니다.
+- 최신순으로 정렬되어 반환됩니다.
+
+**응답 예시 (전체 조회):**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": [
+    {
+      "createdAt": "2024-11-06",
+      "conditionTypeTitle": "방문 포인트",
+      "pointAmount": 500,
+      "balanceAfter": 1500
+    },
+    {
+      "createdAt": "2024-11-05",
+      "conditionTypeTitle": "회원가입",
+      "pointAmount": 1000,
+      "balanceAfter": 1000
+    }
+  ]
+}
+```
+
+**응답 예시 (적립만 조회):**
+```
+GET http://localhost:8080/api/me/points/histories?type=EARN
+```
+
+**응답 예시 (사용만 조회):**
+```
+GET http://localhost:8080/api/me/points/histories?type=USE
+```
+
+**에러 응답:**
+- `401 Unauthorized`: 인증 실패
+- `404 Not Found`: 사용자 없음
+
+### 5.2 소멸 예정 포인트 조회
+```
+GET http://localhost:8080/api/me/points/expiring-points
+```
+**인증 필요**: 로그인 필수
+
+**설명:**
+- 로그인한 사용자의 7일 이내 소멸 예정 포인트를 조회합니다.
+- 포인트는 적립 후 30일이 지나면 소멸됩니다.
+- 7일 이내 소멸 예정 = 적립일로부터 23~30일 사이인 포인트
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": {
+    "expiringPointsWithin7Days": 500
+  }
+}
+```
+
+**에러 응답:**
+- `401 Unauthorized`: 인증 실패
+- `404 Not Found`: 사용자 없음
+
+---
+
+## 6. 매거진 (Magazine)
+
+### 6.1 매거진 상세 조회
 ```
 GET http://localhost:8080/api/magazines/1
 ```
@@ -667,7 +946,7 @@ GET http://localhost:8080/api/magazines/1
 
 **참고**: 로그인한 경우 자동으로 `isLiked` 정보 포함
 
-### 4.2 매거진 목록 조회 (커서 기반 페이징)
+### 6.2 매거진 목록 조회 (커서 기반 페이징)
 ```
 GET http://localhost:8080/api/magazines?size=10
 ```
@@ -724,7 +1003,7 @@ GET http://localhost:8080/api/magazines?lastMagazineId=123&size=10
 - 로그인한 경우 자동으로 `isLiked` 정보 포함
 - ID 기준 내림차순으로 정렬되어 반환됩니다 (최신순)
 
-### 4.3 매거진 좋아요 토글
+### 6.3 매거진 좋아요 토글
 ```
 POST http://localhost:8080/api/magazines/1/like
 ```
@@ -743,7 +1022,7 @@ POST http://localhost:8080/api/magazines/1/like
 }
 ```
 
-### 4.4 매거진 카드뉴스에 매핑된 장소 목록 조회
+### 6.4 매거진 카드뉴스에 매핑된 장소 목록 조회
 ```
 GET http://localhost:8080/api/magazines/1/places
 ```
@@ -753,12 +1032,11 @@ GET http://localhost:8080/api/magazines/1/places
 - `count` (optional): 조회할 개수 (thumbnailOnly=true일 때만 적용)
 
 **설명:**
-- 매거진 상세: 마지막 페이지의 관광지 보러가기 버튼에서 호출합니다.
+- 매거진 상세: 마지막 페이지의 관광지 보러가기 버튼 상단 혹은 버튼을 눌렀을 때 호출합니다.
 - 매거진 ID를 받아 해당 매거진의 카드뉴스에 연결된 Place를 반환합니다.
-- `thumbnailOnly=false`(기본값)인 경우: 모든 필드를 포함한 SimplePlaceDto 리스트를 반환합니다.
-  - 장소 ID, 장소 이름, 장소 썸네일, 장소 주소, 장소 카테고리, 사용자 좋아요 여부를 반환합니다. (기준 거리 필드 = null)
 - `thumbnailOnly=true`인 경우: 장소 ID, 이름, 썸네일만 반환하며, `count` 파라미터로 개수를 제한할 수 있습니다.
-- 로그인한 경우 사용자가 좋아요한 장소 여부도 함께 반환됩니다 (thumbnailOnly=false일 때만).
+- `thumbnailOnly=false`이거나 생략된 경우: 모든 필드를 포함한 SimplePlaceDto를 반환합니다. (distanceInMeters 필드는 null)
+- 로그인한 경우 사용자가 좋아요한 장소 여부도 함께 반환됩니다.
 
 **전체 정보 조회 예시:**
 ```
@@ -812,12 +1090,16 @@ GET http://localhost:8080/api/magazines/1/places?thumbnailOnly=true&count=3
 
 ---
 
-## 5. 광고 (Advertise)
+## 8. 광고 (Advertise)
 
-### 5.1 공식 광고 조회
+### 8.1 공식 광고 조회
 ```
 GET http://localhost:8080/api/advertise/official
 ```
+
+**설명:**
+- 유효한 공식 광고 목록을 조회합니다.
+- enabled=true이고 현재 시간이 노출 기간 내인 광고만 반환됩니다.
 
 **응답 예시:**
 ```json
@@ -839,18 +1121,42 @@ GET http://localhost:8080/api/advertise/official
 }
 ```
 
-### 5.2 개인 광고 조회
+### 8.2 개인 광고 조회
 ```
 GET http://localhost:8080/api/advertise/private
 ```
 
+**설명:**
+- 유효한 개인 광고 목록을 조회합니다.
+- enabled=true이고 현재 시간이 노출 기간 내인 광고만 반환됩니다.
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "message": "성공",
+  "data": {
+    "totalCount": 1,
+    "ads": [
+      {
+        "adId": 1,
+        "imageUrl": "https://s3.../ad1.jpg",
+        "title": "광고 제목",
+        "description": "광고 설명",
+        "linkUrl": "https://..."
+      }
+    ]
+  }
+}
+```
+
 ---
 
-## 6. 관리자 (Admin) - 데이터 생성
+## 9. 관리자 (Admin) - 데이터 생성
 
 **참고**: 관리자 API는 **인증 없이** 사용할 수 있습니다.
 
-### 6.1 장소 생성
+### 9.1 장소 생성
 ```
 POST http://localhost:8080/api/admin/places
 Content-Type: application/json
@@ -897,7 +1203,7 @@ Content-Type: application/json
 }
 ```
 
-### 6.2 장소 사진 추가 (여러 장)
+### 9.2 장소 사진 추가 (여러 장)
 ```
 POST http://localhost:8080/api/admin/places/1/photos
 Content-Type: application/json
@@ -933,7 +1239,7 @@ Content-Type: application/json
 }
 ```
 
-### 6.3 장소 수정
+### 9.3 장소 수정
 ```
 PUT http://localhost:8080/api/admin/places/1
 Content-Type: application/json
@@ -1038,7 +1344,7 @@ Content-Type: application/json
 }
 ```
 
-### 6.4 매거진 생성
+### 9.4 매거진 생성
 ```
 POST http://localhost:8080/api/admin/magazines
 Content-Type: application/json
@@ -1141,7 +1447,7 @@ Content-Type: application/json
    - `name: ""` 전송
    - 예상 응답: `400 Bad Request` + 에러 메시지
 
-### 6.5 매거진 수정
+### 9.5 매거진 수정
 ```
 PUT http://localhost:8080/api/admin/magazines/1
 Content-Type: application/json
@@ -1279,7 +1585,7 @@ Content-Type: application/json
    - 존재하지 않는 `magazineId` 전송
    - 예상 응답: `404 Not Found` + 에러 메시지
 
-### 6.6 태그 목록 조회
+### 9.6 태그 목록 조회
 ```
 GET http://localhost:8080/api/admin/tags
 ```
@@ -1306,7 +1612,7 @@ GET http://localhost:8080/api/admin/tags
 }
 ```
 
-### 6.7 태그 생성
+### 9.7 태그 생성
 ```
 POST http://localhost:8080/api/admin/tags
 Content-Type: application/json
@@ -1330,7 +1636,7 @@ Content-Type: application/json
 }
 ```
 
-### 6.8 태그 수정
+### 9.8 태그 수정
 ```
 PUT http://localhost:8080/api/admin/tags/1
 Content-Type: application/json
@@ -1361,7 +1667,7 @@ Content-Type: application/json
 }
 ```
 
-### 6.9 매거진에 태그 추가
+### 9.9 매거진에 태그 추가
 ```
 POST http://localhost:8080/api/admin/magazines/1/tags/1
 ```
@@ -1382,7 +1688,7 @@ POST http://localhost:8080/api/admin/magazines/1/tags/1
 }
 ```
 
-### 6.10 매거진에서 태그 삭제
+### 9.10 매거진에서 태그 삭제
 ```
 DELETE http://localhost:8080/api/admin/magazines/1/tags/1
 ```
@@ -1413,7 +1719,7 @@ DELETE http://localhost:8080/api/admin/magazines/1/tags/1
 }
 ```
 
-### 6.11 매거진 카드에 장소 매핑
+### 9.11 매거진 카드에 장소 매핑
 ```
 PUT http://localhost:8080/api/admin/magazines/1/cards/0/place/1
 ```
@@ -1447,7 +1753,7 @@ PUT http://localhost:8080/api/admin/magazines/1/cards/0/place/1
 }
 ```
 
-### 6.12 매거진 카드에서 장소 매핑 해제
+### 9.12 매거진 카드에서 장소 매핑 해제
 ```
 DELETE http://localhost:8080/api/admin/magazines/1/cards/0/place
 ```
@@ -1478,7 +1784,7 @@ DELETE http://localhost:8080/api/admin/magazines/1/cards/0/place
 }
 ```
 
-### 6.13 공식 광고 생성
+### 9.13 공식 광고 생성
 ```
 POST http://localhost:8080/api/admin/advertise/official
 Content-Type: application/json
@@ -1512,7 +1818,7 @@ Content-Type: application/json
 }
 ```
 
-### 6.14 개인 광고 생성
+### 9.14 개인 광고 생성
 ```
 POST http://localhost:8080/api/admin/advertise/private
 Content-Type: application/json
@@ -1539,7 +1845,7 @@ Content-Type: application/json
 }
 ```
 
-### 6.15 전체 장소 목록 조회 (간단 정보, 관리자용)
+### 9.15 전체 장소 목록 조회 (간단 정보, 관리자용)
 ```
 GET http://localhost:8080/api/admin/places
 ```
@@ -1566,7 +1872,7 @@ GET http://localhost:8080/api/admin/places
 }
 ```
 
-### 6.16 전체 리뷰 목록 조회 (관리자용)
+### 9.16 전체 리뷰 목록 조회 (관리자용)
 ```
 GET http://localhost:8080/api/admin/reviews
 ```
@@ -1593,6 +1899,58 @@ GET http://localhost:8080/api/admin/reviews
   ]
 }
 ```
+
+### 9.17 포인트 적립 조건 등록/수정
+```
+POST http://localhost:8080/api/admin/point/conditions
+Content-Type: application/json
+
+{
+  "conditionType": "REVIEW_CREATE",
+  "pointAmount": 100
+}
+```
+
+**⚠️ 중요**: POST 요청이므로 **Request Body**에 JSON 데이터를 넣어야 합니다.
+
+**Request Body:**
+- `conditionType` (required): 포인트 적립 조건 타입
+  - `SIGN_UP`: 회원가입
+  - `REFERRAL`: 친구 초대
+  - `PLACE_VISIT`: 방문 포인트
+  - `REVIEW_CREATE`: 리뷰 포인트
+  - `REVIEW_WITH_PHOTO`: 사진 리뷰 포인트
+  - `PROFILE_COMPLETE`: 프로필 완성
+- `pointAmount` (required): 적립 포인트 양 (0 이상의 정수)
+
+**설명:**
+- 포인트 적립 조건을 등록하거나 수정합니다.
+- 조건 타입(conditionType)은 unique하므로, 이미 존재하는 조건 타입이면 포인트 양만 업데이트되고, 존재하지 않는 조건 타입이면 새로 생성됩니다.
+- `pointAmount`는 0 이상의 값이어야 합니다.
+
+**응답 예시 (생성):**
+```json
+{
+  "success": true,
+  "message": "포인트 적립 조건이 등록/수정되었습니다.",
+  "data": 1
+}
+```
+
+**응답 예시 (수정):**
+```json
+{
+  "success": true,
+  "message": "포인트 적립 조건이 등록/수정되었습니다.",
+  "data": 1
+}
+```
+
+**에러 응답:**
+- `400 Bad Request`: 
+  - 필수 필드 누락 (conditionType 또는 pointAmount가 null)
+  - pointAmount가 0 미만인 경우
+  - 잘못된 conditionType 값
 
 ---
 
@@ -1648,7 +2006,16 @@ if (pm.response.code === 200) {
 8. `PUT /api/me/reviews/1` - 리뷰 수정 (finalUrl과 order 사용)
 9. `DELETE /api/me/reviews/1` - 리뷰 삭제
 
-### 시나리오 3: 매거진 조회 및 좋아요
+### 시나리오 3: 방문 기록 및 포인트
+1. `POST /api/auth/login` - 로그인
+2. `GET /api/me/visits/places` - 오늘 일정 장소 조회
+3. `POST /api/me/visits/places/1` - 장소 방문 확인 및 기록 (GPS 위치 전송)
+4. `GET /api/me/visits/history` - 방문 기록 목록 조회 (리뷰 작성 여부 포함)
+5. `GET /api/me/points/histories?type=ALL` - 포인트 히스토리 전체 조회
+6. `GET /api/me/points/histories?type=EARN` - 포인트 적립 내역만 조회
+7. `GET /api/me/points/expiring-points` - 소멸 예정 포인트 조회
+
+### 시나리오 4: 매거진 조회 및 좋아요
 1. `GET /api/magazines?size=5` - 매거진 목록 조회 (첫 페이지)
 2. `GET /api/magazines?lastMagazineId=123&size=5` - 매거진 목록 조회 (다음 페이지)
 3. `GET /api/magazines/1` - 매거진 상세 조회
@@ -1656,7 +2023,7 @@ if (pm.response.code === 200) {
 5. `GET /api/magazines/1/places?thumbnailOnly=true&count=3` - 매거진 카드뉴스에 매핑된 장소 썸네일 목록 조회
 6. `POST /api/magazines/1/like` - 좋아요 토글 (로그인 필요)
 
-### 시나리오 4: 관리자가 데이터 생성 (전체 플로우)
+### 시나리오 5: 관리자가 데이터 생성 (전체 플로우)
 1. `POST /api/admin/places` - 장소 생성
 2. `POST /api/admin/places/1/photos` - 장소 사진 추가 (여러 장 한번에)
 3. `PUT /api/admin/places/1` - 장소 수정 (사진 포함)
