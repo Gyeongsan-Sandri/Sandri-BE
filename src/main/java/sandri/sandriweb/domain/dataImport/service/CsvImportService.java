@@ -11,6 +11,7 @@ import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import sandri.sandriweb.domain.dataImport.dto.GooglePlaceDetailsResponse;
 import sandri.sandriweb.domain.dataImport.dto.GooglePlaceResponse;
 import sandri.sandriweb.domain.dataImport.dto.StoreCsvDto;
 import sandri.sandriweb.domain.place.entity.Place;
@@ -121,13 +122,23 @@ public class CsvImportService {
         // 기존 장소 확인 (이름 + 주소)
         java.util.Optional<Place> existingPlace = placeRepository.findByNameAndAddress(fullName, address);
 
-        // Google Place API로 검색
+        // 1단계: Google Find Place API로 place_id 검색
         GooglePlaceResponse googlePlace = googlePlaceService.findPlace(fullName, address);
+
+        // 2단계: Place Details API로 상세 정보 조회
+        GooglePlaceDetailsResponse placeDetails = null;
+        if (googlePlace != null && googlePlace.getCandidates() != null
+                && !googlePlace.getCandidates().isEmpty()) {
+            String placeId = googlePlace.getCandidates().get(0).getPlaceId();
+            if (placeId != null && !placeId.isEmpty()) {
+                placeDetails = googlePlaceService.getPlaceDetails(placeId);
+            }
+        }
 
         if (existingPlace.isPresent()) {
             // 기존 장소가 있으면 PATCH (업데이트)
             Place place = existingPlace.get();
-            boolean updated = updatePlaceFromCsv(place, store, googlePlace);
+            boolean updated = updatePlaceFromCsv(place, store, placeDetails);
             if (updated) {
                 log.info("장소 업데이트 성공 (PATCH): {}", fullName);
                 return true;
@@ -137,13 +148,9 @@ public class CsvImportService {
             }
         } else {
             // 새로운 장소면 POST (생성)
-            if (googlePlace != null && googlePlace.getCandidates() != null
-                    && !googlePlace.getCandidates().isEmpty()) {
-
-                GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
-
+            if (placeDetails != null) {
                 // Place 엔티티 생성 및 저장 (Google 데이터 기반)
-                Place savedPlace = createAndSavePlaceFromCsv(store, candidate);
+                Place savedPlace = createAndSavePlaceFromCsv(store, placeDetails);
 
                 if (savedPlace != null) {
                     log.info("장소 저장 성공 (POST - Google 데이터): {}", fullName);
@@ -168,22 +175,20 @@ public class CsvImportService {
      * 기존 Place를 CSV 데이터로 업데이트 (PATCH)
      * @return true: 업데이트됨, false: 변경사항 없음
      */
-    private boolean updatePlaceFromCsv(Place place, StoreCsvDto csvData, GooglePlaceResponse googlePlace) {
+    private boolean updatePlaceFromCsv(Place place, StoreCsvDto csvData, GooglePlaceDetailsResponse placeDetails) {
         // 데이터 소스 결정 (Google 데이터가 있으면 GOOGLE, 없으면 CSV)
         DataSource dataSource;
-        boolean hasGoogleData = googlePlace != null && googlePlace.getCandidates() != null
-                                && !googlePlace.getCandidates().isEmpty();
+        boolean hasGoogleData = placeDetails != null && placeDetails.getLocation() != null;
         dataSource = hasGoogleData ? DataSource.GOOGLE : DataSource.CSV;
 
         // 좌표 업데이트
         Point newLocation = null;
         if (hasGoogleData) {
             // Google 좌표 우선
-            GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
             newLocation = geometryFactory.createPoint(
                 new Coordinate(
-                    candidate.getGeometry().getLocation().getLng(),
-                    candidate.getGeometry().getLocation().getLat()
+                    placeDetails.getLocation().getLongitude(),
+                    placeDetails.getLocation().getLatitude()
                 )
             );
         } else if (csvData.getLongitude() != null && !csvData.getLongitude().isEmpty()
@@ -201,9 +206,8 @@ public class CsvImportService {
         // 요약 정보 업데이트
         String newSummary = null;
         if (hasGoogleData) {
-            GooglePlaceResponse.Candidate candidate = googlePlace.getCandidates().get(0);
-            if (candidate.getEditorialSummary() != null) {
-                newSummary = cleanHtmlTags(candidate.getEditorialSummary().getOverview());
+            if (placeDetails.getEditorialSummary() != null) {
+                newSummary = cleanHtmlTags(placeDetails.getEditorialSummary().getText());
             }
         }
         if (newSummary == null || newSummary.isEmpty()) {
@@ -246,13 +250,13 @@ public class CsvImportService {
     /**
      * Place 엔티티 생성 및 저장 (CSV 데이터 기반)
      */
-    private Place createAndSavePlaceFromCsv(StoreCsvDto csvData, GooglePlaceResponse.Candidate googleCandidate) {
+    private Place createAndSavePlaceFromCsv(StoreCsvDto csvData, GooglePlaceDetailsResponse placeDetails) {
         try {
-            // 좌표 생성 (Google Place API 기준)
+            // 좌표 생성 (Google Place Details API 기준)
             Point location = geometryFactory.createPoint(
                 new Coordinate(
-                    googleCandidate.getGeometry().getLocation().getLng(),
-                    googleCandidate.getGeometry().getLocation().getLat()
+                    placeDetails.getLocation().getLongitude(),
+                    placeDetails.getLocation().getLatitude()
                 )
             );
 
@@ -263,23 +267,21 @@ public class CsvImportService {
             }
 
             // Google 이름 우선
-            String name = googleCandidate.getName();
-            if (name == null || name.isEmpty()) {
-                name = fullName;
-            }
+            String name = placeDetails.getDisplayName() != null && placeDetails.getDisplayName().getText() != null
+                    ? placeDetails.getDisplayName().getText()
+                    : fullName;
 
             // 주소 (Google 우선)
-            String address = googleCandidate.getFormattedAddress();
-            if (address == null || address.isEmpty()) {
-                address = csvData.getRoadAddress() != null && !csvData.getRoadAddress().isEmpty()
+            String address = placeDetails.getFormattedAddress() != null && !placeDetails.getFormattedAddress().isEmpty()
+                    ? placeDetails.getFormattedAddress()
+                    : (csvData.getRoadAddress() != null && !csvData.getRoadAddress().isEmpty()
                         ? csvData.getRoadAddress()
-                        : csvData.getJibunAddress();
-            }
+                        : csvData.getJibunAddress());
 
-            // 요약 정보 (Google 우선, 없으면 CSV의 상권업종소분류명)
+            // 요약 정보 (Google editorialSummary 우선, 없으면 CSV의 상권업종소분류명)
             String summary = null;
-            if (googleCandidate.getEditorialSummary() != null) {
-                summary = cleanHtmlTags(googleCandidate.getEditorialSummary().getOverview());
+            if (placeDetails.getEditorialSummary() != null && placeDetails.getEditorialSummary().getText() != null) {
+                summary = cleanHtmlTags(placeDetails.getEditorialSummary().getText());
             }
             if (summary == null || summary.isEmpty()) {
                 summary = cleanHtmlTags(csvData.getIndustryName());  // 상권업종소분류명
@@ -298,7 +300,7 @@ public class CsvImportService {
                 return null;
             }
 
-            // Place 엔티티 생성
+            // Place 엔티티 생성 (사진 리스트 포함)
             Place place = Place.builder()
                     .name(name)
                     .address(address)
@@ -308,31 +310,31 @@ public class CsvImportService {
                     .group(group)
                     .category(category)
                     .dataSource(DataSource.GOOGLE)
+                    .photos(new ArrayList<>())
                     .build();
 
-            Place savedPlace = placeRepository.save(place);
-
-            // Google Place에서 사진이 있으면 PlacePhoto 생성
-            if (googleCandidate.getPhotos() != null && !googleCandidate.getPhotos().isEmpty()) {
-                List<PlacePhoto> photos = new ArrayList<>();
+            // Google Place Details에서 사진이 있으면 PlacePhoto 생성 (최대 10장)
+            if (placeDetails.getPhotos() != null && !placeDetails.getPhotos().isEmpty()) {
                 int photoOrder = 0;
 
-                for (GooglePlaceResponse.Photo photo : googleCandidate.getPhotos()) {
-                    if (photoOrder >= 20) break; // 최대 20장까지만
+                for (GooglePlaceDetailsResponse.Photo photo : placeDetails.getPhotos()) {
+                    if (photoOrder >= 10) break; // 최대 10장까지
 
-                    String photoUrl = googlePlaceService.getPhotoUrl(photo.getPhotoReference(), 800);
+                    // New Places API photo URL 생성
+                    String photoUrl = googlePlaceService.getPhotoUrlFromName(photo.getName(), 800);
 
                     PlacePhoto placePhoto = PlacePhoto.builder()
-                            .place(savedPlace)
+                            .place(place)
                             .photoUrl(photoUrl)
                             .order(photoOrder++)
                             .build();
 
-                    photos.add(placePhoto);
+                    place.getPhotos().add(placePhoto);
                 }
-
-                savedPlace.getPhotos().addAll(photos);
             }
+
+            // Place 저장 (cascade로 PlacePhoto도 함께 저장됨)
+            Place savedPlace = placeRepository.save(place);
 
             return savedPlace;
 
