@@ -88,4 +88,34 @@ public class DataImportController {
                     .body(ApiResponseDto.error("CSV 임포트 중 오류가 발생했습니다: " + e.getMessage()));
         }
     }
+
+    @PostMapping("/csv/resource")
+    @Operation(summary = "리소스 CSV 파일로 장소 데이터 임포트",
+               description = "프로젝트 리소스 폴더(src/main/resources)에 있는 CSV 파일을 읽어서 장소 정보를 DB에 저장합니다. " +
+                             "초기 데이터 로딩용입니다. " +
+                             "Google Place API로 검색하여 정보를 찾으면 Google 데이터를 우선 사용하고, " +
+                             "찾지 못하면 CSV 데이터를 직접 사용하여 저장합니다. " +
+                             "mode=insert (기본값): 신규 장소만 추가, 기존 장소는 건드리지 않음. " +
+                             "mode=upsert: 신규 추가 + 기존 장소 업데이트.")
+    public ResponseEntity<ApiResponseDto<String>> importFromResourceCsv(
+            @RequestParam(value = "filename", defaultValue = "경북_상가정보_시군구코드_47290.csv") String filename,
+            @RequestParam(value = "mode", defaultValue = "insert") String mode) {
+        log.info("리소스 CSV 데이터 임포트 요청: filename={}, mode={}", filename, mode);
+
+        // mode 검증
+        if (!mode.equals("insert") && !mode.equals("upsert")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("mode는 'insert' 또는 'upsert'만 가능합니다."));
+        }
+
+        try {
+            String result = csvImportService.importStoresFromResource(filename, mode);
+            return ResponseEntity.ok(ApiResponseDto.success(result));
+
+        } catch (Exception e) {
+            log.error("리소스 CSV 데이터 임포트 실패", e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("CSV 임포트 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
 }

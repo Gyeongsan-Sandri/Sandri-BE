@@ -2,7 +2,6 @@ package sandri.sandriweb.domain.dataImport.service;
 
 import com.opencsv.bean.CsvToBean;
 import com.opencsv.bean.CsvToBeanBuilder;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -72,7 +71,7 @@ public class CsvImportService {
             List<StoreCsvDto> filteredStores = stores.stream()
                     .filter(store -> TARGET_PROVINCE.equals(store.getProvince())
                                   && TARGET_CITY.equals(store.getCity()))
-                    .collect(Collectors.toList());
+                    .toList();
 
             totalFiltered = stores.size() - filteredStores.size();
             log.info("필터링 완료: {} 개 매장 (제외: {} 개)", filteredStores.size(), totalFiltered);
@@ -237,6 +236,68 @@ public class CsvImportService {
     }
 
     /**
+     * 리소스 폴더의 CSV 파일에서 경산시 매장 정보를 추출하여 DB에 저장
+     * @param resourcePath 리소스 경로 (예: "경북_상가정보_시군구코드_47290.csv")
+     * @param mode "insert" (신규만 추가) 또는 "upsert" (업데이트 포함)
+     * @return 처리 결과 메시지
+     */
+    public String importStoresFromResource(String resourcePath, String mode) {
+        int totalImported = 0;
+        int totalFailed = 0;
+        int totalSkipped = 0;
+        int totalFiltered = 0;
+
+        log.info("리소스 CSV 파일 임포트 시작: resourcePath={}, mode={}", resourcePath, mode);
+
+        try {
+            // 리소스 파일 읽기
+            org.springframework.core.io.Resource resource = 
+                new org.springframework.core.io.ClassPathResource(resourcePath);
+            
+            if (!resource.exists()) {
+                throw new RuntimeException("리소스 파일을 찾을 수 없습니다: " + resourcePath);
+            }
+
+            // CSV 파일 파싱
+            List<StoreCsvDto> stores = parseCsvFileFromResource(resource);
+            log.info("CSV 파일 파싱 완료: 총 {} 개 행", stores.size());
+
+            // 경산시 필터링
+            List<StoreCsvDto> filteredStores = stores.stream()
+                    .filter(store -> TARGET_PROVINCE.equals(store.getProvince())
+                                  && TARGET_CITY.equals(store.getCity()))
+                    .toList();
+
+            totalFiltered = stores.size() - filteredStores.size();
+            log.info("필터링 완료: {} 개 매장 (제외: {} 개)", filteredStores.size(), totalFiltered);
+
+            // 각 매장 처리
+            for (StoreCsvDto store : filteredStores) {
+                try {
+                    boolean success = self.processStore(store, mode);
+                    if (success) {
+                        totalImported++;
+                    } else {
+                        totalSkipped++;
+                    }
+                } catch (Exception e) {
+                    log.error("매장 처리 중 오류: name={}, error={}", store.getStoreName(), e.getMessage());
+                    totalFailed++;
+                }
+            }
+
+            String result = String.format("CSV 임포트 완료 - 성공: %d, 실패: %d, 유지: %d, 필터링 제외: %d",
+                totalImported, totalFailed, totalSkipped, totalFiltered);
+            log.info(result);
+            return result;
+
+        } catch (Exception e) {
+            log.error("CSV 임포트 중 오류 발생", e);
+            throw new RuntimeException("CSV 임포트 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * CSV 파일 파싱
      */
     private List<StoreCsvDto> parseCsvFile(MultipartFile file) {
@@ -252,6 +313,26 @@ public class CsvImportService {
 
         } catch (Exception e) {
             log.error("CSV 파일 파싱 실패", e);
+            throw new RuntimeException("CSV 파일 파싱 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 리소스 파일에서 CSV 파싱
+     */
+    private List<StoreCsvDto> parseCsvFileFromResource(org.springframework.core.io.Resource resource) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8))) {
+
+            CsvToBean<StoreCsvDto> csvToBean = new CsvToBeanBuilder<StoreCsvDto>(reader)
+                    .withType(StoreCsvDto.class)
+                    .withIgnoreLeadingWhiteSpace(true)
+                    .build();
+
+            return csvToBean.parse();
+
+        } catch (Exception e) {
+            log.error("리소스 CSV 파일 파싱 실패", e);
             throw new RuntimeException("CSV 파일 파싱 실패: " + e.getMessage(), e);
         }
     }
