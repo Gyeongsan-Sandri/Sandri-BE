@@ -384,22 +384,41 @@ public class PlaceService {
     }
 
     /**
-     * 카테고리별 장소 조회 (좋아요 많은 순)
+     * 카테고리별 장소 조회 (좋아요 많은 순, 커서 기반 페이징)
      * @param categoryDisplayName 카테고리 표시 이름 ('자연/힐링', '역사/전통', '문화/체험', '식도락')
      * @param count 조회할 개수
+     * @param lastPlaceId 마지막 장소 ID (더보기용, null이면 처음부터)
      * @param userId 사용자 ID (로그인한 경우에만 제공, null 가능)
      * @return 카테고리별 장소 리스트
      */
     @Transactional(readOnly = true)
-    public List<SimplePlaceDto> getPlacesByCategory(String categoryDisplayName, int count, Long userId) {
+    public List<SimplePlaceDto> getPlacesByCategory(String categoryDisplayName, int count, Long lastPlaceId, Long userId) {
         // 카테고리 표시 이름을 enum으로 변환
         Category category = convertDisplayNameToCategory(categoryDisplayName);
         if (category == null) {
             throw new RuntimeException("유효하지 않은 카테고리입니다: " + categoryDisplayName);
         }
 
-        // 카테고리별 장소 조회 (좋아요 많은 순)
-        List<Place> places = placeRepository.findByCategoryOrderByLikeCountDesc(category.name(), count);
+        // 카테고리별 장소 조회 (좋아요 많은 순, 커서 기반 페이징)
+        List<Place> places;
+        if (lastPlaceId == null) {
+            // 첫 페이지 조회
+            places = placeRepository.findByCategoryOrderByLikeCountDesc(category.name(), count);
+        } else {
+            // 커서 기반 페이징: 마지막 장소의 정보를 조회
+            Place lastPlace = placeRepository.findById(lastPlaceId)
+                    .orElseThrow(() -> new RuntimeException("마지막 장소를 찾을 수 없습니다."));
+            
+            long lastLikeCount = placeRepository.getLikeCountByPlaceId(lastPlaceId);
+            
+            places = placeRepository.findByCategoryOrderByLikeCountDescWithCursor(
+                    category.name(),
+                    lastLikeCount,
+                    lastPlace.getCreatedAt(),
+                    lastPlaceId,
+                    count
+            );
+        }
 
         if (places.isEmpty()) {
             return List.of();

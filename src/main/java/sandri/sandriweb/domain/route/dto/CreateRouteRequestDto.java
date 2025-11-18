@@ -1,5 +1,6 @@
 package sandri.sandriweb.domain.route.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -31,6 +32,7 @@ public class CreateRouteRequestDto {
     private LocalDate endDate;
     
     @Builder.Default
+    @JsonProperty("public")
     @Schema(description = "공개 여부", example = "false")
     private boolean isPublic = false;
     
