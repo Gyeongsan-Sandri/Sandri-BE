@@ -1,5 +1,6 @@
 package sandri.sandriweb.domain.route.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -26,8 +27,10 @@ public class RouteResponseDto {
     private Long creatorId;
     private String creatorName;
     private String creatorNickname;
+    @JsonProperty("public")
     private boolean isPublic;
     private String shareCode;
+    private String imageUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<ParticipantDto> participants;
@@ -44,6 +47,7 @@ public class RouteResponseDto {
                 .creatorNickname(route.getCreator().getNickname())
                 .isPublic(route.isPublic())
                 .shareCode(route.getShareCode())
+                .imageUrl(route.getImageUrl())
                 .createdAt(route.getCreatedAt())
                 .updatedAt(route.getUpdatedAt())
                 .participants(route.getParticipants().stream()
@@ -90,6 +94,7 @@ public class RouteResponseDto {
         private Double longitude;
         private String description;
         private Integer displayOrder;
+        private String memo;
         
         public static LocationDto from(RouteLocation location) {
             return LocationDto.builder()
@@ -101,6 +106,7 @@ public class RouteResponseDto {
                     .longitude(location.getLongitude() != null ? location.getLongitude().doubleValue() : null)
                     .description(location.getDescription())
                     .displayOrder(location.getDisplayOrder())
+                    .memo(location.getMemo())
                     .build();
         }
     }

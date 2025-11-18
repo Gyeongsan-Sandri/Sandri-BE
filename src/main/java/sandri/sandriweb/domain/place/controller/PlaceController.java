@@ -149,7 +149,8 @@ public class PlaceController {
     @Operation(summary = "카테고리별 장소 조회",
                description = "홈: 카테고리 버튼을 눌러 나오는 카테고리별 장소 조회에서 호출하여 사용합니다. " +
                "카테고리별로 좋아요가 많은 순으로 장소 목록을 조회합니다. 로그인한 경우 사용자가 좋아요한 장소 여부도 함께 반환됩니다. " +
-               "관광지 ID, 이름, 주소, 대표 사진 한 장, 사용자가 좋아요한 장소인지 여부, 대분류, 카테고리를 반환합니다.")
+               "관광지 ID, 이름, 주소, 대표 사진 한 장, 사용자가 좋아요한 장소인지 여부, 대분류, 카테고리를 반환합니다. " +
+               "더보기: lastPlaceId에 마지막 장소 ID를 전달하면 그 다음부터 조회됩니다.")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
@@ -159,15 +160,18 @@ public class PlaceController {
             @RequestParam String category,
             @Parameter(description = "조회할 개수", example = "10")
             @RequestParam(defaultValue = "10") int count,
+            @Parameter(description = "마지막 장소 ID (더보기용, 없으면 처음부터 조회)", example = "5")
+            @RequestParam(required = false) Long lastPlaceId,
             @AuthenticationPrincipal User user) {
 
-        log.info("카테고리별 장소 조회: category={}, count={}", category, count);
+        log.info("카테고리별 장소 조회: category={}, count={}, lastPlaceId={}", 
+                category, count, lastPlaceId);
 
         try {
             // 사용자 ID 조회 (로그인한 경우) - @AuthenticationPrincipal로 최적화
             Long userId = (user != null) ? user.getId() : null;
 
-            List<SimplePlaceDto> response = placeService.getPlacesByCategory(category, count, userId);
+            List<SimplePlaceDto> response = placeService.getPlacesByCategory(category, count, lastPlaceId, userId);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (RuntimeException e) {
             log.error("카테고리별 장소 조회 실패: {}", e.getMessage());

@@ -18,32 +18,35 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Grant execute permission for Gradle Wrapper
-      run: chmod +x ./gradlew
-
-    - name: Build without tests
-      run: ./gradlew clean build -x test
-
     - name: Prepare SSH key
       run: |
-        echo "$EC2_KEY" > key.pem
+        printf "%s" "$EC2_KEY_B64" | base64 --decode > key.pem
+
         chmod 600 key.pem
       env:
-        EC2_KEY: ${{ secrets.EC2_KEY }}
+        EC2_KEY_B64: ${{ secrets.EC2_KEY_B64 }}
 
     - name: Deploy to EC2
       run: |
         ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          set -e
           cd ~/Sandri-BE
+
+          echo " Pulling latest source..."
           git pull origin main
 
-          echo "Stopping current application..."
-          sudo killall java || true
+          echo " Building application..."
+          ./gradlew clean build -x test
 
-          echo "🚀 Starting new application..."
-          JAR_FILE=$(ls build/libs/*SNAPSHOT.jar)
-          nohup java -jar $JAR_FILE > app.log 2>&1 &
+          echo " Stopping previous app if running..."
+          pids=$(pgrep -f "Sandri-Web-0.0.1-SNAPSHOT.jar")
+          if [ -n "$pids" ]; then
+            sudo kill -9 $pids
+          fi
+
+          echo "🚀 Starting application..."
+          nohup java -jar build/libs/Sandri-Web-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
 
           echo "🎉 Deploy completed!"
-          echo "📌 Log: tail -f ~/Sandri-BE/app.log"
+          echo "📌 To view logs manually: tail -f ~/Sandri-BE/app.log"
         EOF

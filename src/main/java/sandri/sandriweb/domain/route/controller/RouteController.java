@@ -1,6 +1,7 @@
 package sandri.sandriweb.domain.route.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -11,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.route.dto.*;
+import sandri.sandriweb.domain.route.enums.RouteSortType;
 import sandri.sandriweb.domain.route.service.RouteService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
@@ -138,21 +140,60 @@ public class RouteController {
             return ResponseEntity.notFound().build();
         }
     }
+
+    @GetMapping("/hot")
+    @Operation(summary = "HOT 루트 조회",
+            description = "좋아요 수와 최근 활동 가중치를 기반으로 인기 공개 루트를 순위대로 반환합니다. " +
+                    "처음: limit=3 (3개), 더보기: limit=8 (8개), 더 더보기: limit=13 (13개)... 5개씩 증가 (최대: 20)")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    public ResponseEntity<ApiResponseDto<List<HotRouteDto>>> getHotRoutes(
+            @Parameter(description = "조회할 루트 개수 (처음: 3, 더보기: +5씩 증가, 최대: 20)", example = "3")
+            @RequestParam(name = "limit", required = false, defaultValue = "3") int limit) {
+
+        if (limit < 1 || limit > 20) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("limit은 1 이상 20 이하여야 합니다."));
+        }
+
+        List<HotRouteDto> hotRoutes = routeService.getHotRoutes(limit);
+        return ResponseEntity.ok(ApiResponseDto.success(hotRoutes));
+    }
     
     @GetMapping("/my")
-    @Operation(summary = "내 루트 목록 조회", description = "현재 사용자의 모든 루트 목록을 조회합니다")
+    @Operation(
+            summary = "내 루트 목록 조회",
+            description = "현재 사용자의 모든 루트 목록을 조회합니다. " +
+                    "정렬 옵션: PINNED(관심/고정 순), LATEST(최신 순, 기본값), OLDEST(오래된 순)."
+    )
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요")
     })
-    public ResponseEntity<ApiResponseDto<List<RouteListDto>>> getMyRoutes(Authentication authentication) {
+    public ResponseEntity<ApiResponseDto<List<RouteListDto>>> getMyRoutes(
+            Authentication authentication,
+            @Parameter(
+                    name = "sort",
+                    description = "정렬 방식: PINNED(관심/고정 순), LATEST(최신 순), OLDEST(오래된 순). 기본값은 LATEST.",
+                    example = "PINNED")
+            @RequestParam(name = "sort", required = false) String sortParam) {
         
         String username = authentication.getName();
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+
+        RouteSortType sortType;
+        try {
+            sortType = RouteSortType.from(sortParam);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error(e.getMessage()));
+        }
         
         log.info("내 루트 목록 조회: 사용자={}", username);
-        ApiResponseDto<List<RouteListDto>> response = routeService.getUserRoutes(user);
+        ApiResponseDto<List<RouteListDto>> response = routeService.getUserRoutes(user, sortType);
         
         return ResponseEntity.ok(response);
     }
@@ -233,6 +274,67 @@ public class RouteController {
         } else {
             return ResponseEntity.status(403).body(response);
         }
+    }
+    
+    @PutMapping("/{routeId}/locations/{locationId}/memo")
+    @Operation(summary = "장소 메모 저장", description = "루트 내 특정 장소에 대한 메모를 저장하거나 수정합니다")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "저장 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "루트 또는 장소 없음")
+    })
+    public ResponseEntity<ApiResponseDto<RouteResponseDto.LocationDto>> upsertLocationMemo(
+            @PathVariable Long routeId,
+            @PathVariable Long locationId,
+            @Valid @RequestBody UpdateLocationMemoRequestDto request,
+            Authentication authentication) {
+
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+
+        log.info("장소 메모 저장 요청: 루트ID={}, 장소ID={}, 사용자={}", routeId, locationId, username);
+        ApiResponseDto<RouteResponseDto.LocationDto> response =
+                routeService.upsertLocationMemo(routeId, locationId, request.getMemo(), user);
+
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else if (response.getMessage() != null && response.getMessage().contains("권한")) {
+            return ResponseEntity.status(403).body(response);
+        } else if (response.getMessage() != null && response.getMessage().contains("찾을 수 없습니다")) {
+            return ResponseEntity.status(404).body(response);
+        }
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @DeleteMapping("/{routeId}/locations/{locationId}/memo")
+    @Operation(summary = "장소 메모 삭제", description = "루트 내 특정 장소의 메모를 삭제합니다")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "삭제 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "루트 또는 장소 없음")
+    })
+    public ResponseEntity<ApiResponseDto<RouteResponseDto.LocationDto>> deleteLocationMemo(
+            @PathVariable Long routeId,
+            @PathVariable Long locationId,
+            Authentication authentication) {
+
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+
+        log.info("장소 메모 삭제 요청: 루트ID={}, 장소ID={}, 사용자={}", routeId, locationId, username);
+        ApiResponseDto<RouteResponseDto.LocationDto> response =
+                routeService.deleteLocationMemo(routeId, locationId, user);
+
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else if (response.getMessage() != null && response.getMessage().contains("권한")) {
+            return ResponseEntity.status(403).body(response);
+        } else if (response.getMessage() != null && response.getMessage().contains("찾을 수 없습니다")) {
+            return ResponseEntity.status(404).body(response);
+        }
+        return ResponseEntity.badRequest().body(response);
     }
     
     @GetMapping("/{routeId}/share")

@@ -19,6 +19,16 @@ spring:
     username: ${DATABASE_USER}
     password: ${DATABASE_PASS}
 
+  servlet:
+    multipart:
+      max-file-size: 100MB # 업로드할 수 있는 개별 파일의 최대 크기
+      max-request-size: 100MB # multipart/form-data 요청의 최대 허용 크기
+      enabled: true
+
+server:
+  tomcat:
+    max-swallow-size: 100MB # Tomcat이 삼킬 수 있는 최대 요청 본문 크기
+
 springdoc:
   api-docs:
     path: /v3/api-docs
@@ -33,6 +43,10 @@ google:
   maps:
     api-key: ${GOOGLE_MAPS_API_KEY:your-pop-google-maps-api-key-here}
     base-url: https://maps.googleapis.com/maps/api
+  places:
+    find-place-url: https://maps.googleapis.com/maps/api/place/findplacefromtext/json
+    details-url: https://places.googleapis.com/v1/places
+    photo-url: https://maps.googleapis.com/maps/api/place/photo
 
 # 외부 API (경산시 관광 서비스)
 external:
@@ -52,11 +66,6 @@ cloud:
       bucket: sandri-img-bucket   # 버킷 이름
     stack:
       auto: false
-
-  servlet:
-    multipart:
-      max-file-size: 10MB # 업로드할 수 있는 개별 파일의 최대 크기 (기본 1MB)
-      max-request-size: 10MB # multipart/form-data 요청의 최대 허용 크기 (기본 10MB)
 
 app:
   base-url: ${APP_BASE_URL:http://localhost:8080}

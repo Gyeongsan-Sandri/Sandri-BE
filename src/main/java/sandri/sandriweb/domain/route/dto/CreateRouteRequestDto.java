@@ -1,5 +1,6 @@
 package sandri.sandriweb.domain.route.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -31,8 +32,12 @@ public class CreateRouteRequestDto {
     private LocalDate endDate;
     
     @Builder.Default
+    @JsonProperty("public")
     @Schema(description = "공개 여부", example = "false")
     private boolean isPublic = false;
+    
+    @Schema(description = "대표 이미지 URL", example = "https://s3.amazonaws.com/bucket/route-cover.jpg")
+    private String imageUrl;
     
     @Schema(description = "장소 목록")
     private List<LocationDto> locations;
@@ -64,6 +69,9 @@ public class CreateRouteRequestDto {
         
         @Schema(description = "표시 순서", example = "0")
         private Integer displayOrder;
+
+        @Schema(description = "장소 메모", example = "반드시 사진 찍기")
+        private String memo;
     }
 }
 
