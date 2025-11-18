@@ -8,7 +8,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import sandri.sandriweb.domain.review.dto.GetPresignedUrlsResponseDto;
 import sandri.sandriweb.domain.review.dto.PresignedUrlDto;
@@ -33,18 +32,16 @@ public class FileController {
                              "프론트엔드에서 선택한 파일들의 파일명, order, Content-Type을 전송하면, " +
                              "각 파일에 대한 Presigned URL을 발급하고 이와 함께 finalUrl과 order를 반환합니다. " +
                              "발급된 Presigned URL로 PUT 요청을 보내 파일을 업로드하고, " +
-                             "업로드 완료 후 finalUrl과 order를 리뷰 작성 시 사용합니다.")
+                             "업로드 완료 후 finalUrl과 order를 리뷰 작성 시 사용합니다. " +
+                             "인증 없이 사용 가능합니다.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Presigned URL 발급 성공"),
-            @ApiResponse(responseCode = "401", description = "인증 필요"),
             @ApiResponse(responseCode = "400", description = "잘못된 요청")
     })
     public ResponseEntity<ApiResponseDto<GetPresignedUrlsResponseDto>> getPresignedUrls(
-            Authentication authentication,
             @Valid @RequestBody RequestPresignedUrlRequestDto request) {
 
-        String username = authentication.getName();
-        log.info("Presigned URL 발급 요청: username={}, fileCount={}", username, 
+        log.info("Presigned URL 발급 요청: fileCount={}", 
                  request.getFiles() != null ? request.getFiles().size() : 0);
 
         try {
@@ -91,10 +88,10 @@ public class FileController {
                     .presignedUrls(presignedUrls)
                     .build();
 
-            log.info("Presigned URL 발급 완료: username={}, fileCount={}", username, presignedUrls.size());
+            log.info("Presigned URL 발급 완료: fileCount={}", presignedUrls.size());
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (Exception e) {
-            log.error("Presigned URL 생성 중 오류 발생: username={}", username, e);
+            log.error("Presigned URL 생성 중 오류 발생: ", e);
             return ResponseEntity.badRequest()
                     .body(ApiResponseDto.error("Presigned URL 생성 중 오류가 발생했습니다: " + e.getMessage()));
         }
