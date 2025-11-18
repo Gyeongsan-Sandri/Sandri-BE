@@ -755,6 +755,53 @@ public class MagazineService {
     }
 
     /**
+     * 매거진의 Place가 매핑되지 않은 첫 번째 카드에 Place 자동 매핑
+     * @param magazineId 매거진 ID
+     * @param placeId 장소 ID
+     * @return 매핑된 카드 ID (매핑할 카드가 없으면 null)
+     */
+    @Transactional
+    public Long autoMapPlaceToCard(Long magazineId, Long placeId) {
+        // 1. 매거진의 모든 카드 조회 (order 순서대로)
+        List<MagazineCard> cards = magazineCardRepository.findByMagazineIdOrderByOrderAsc(magazineId);
+        
+        if (cards.isEmpty()) {
+            log.warn("매거진에 카드가 없습니다: magazineId={}", magazineId);
+            return null;
+        }
+        
+        // 2. Place가 매핑되지 않은 첫 번째 카드 찾기
+        MagazineCard targetCard = null;
+        for (MagazineCard card : cards) {
+            if (card.getPlace() == null) {
+                targetCard = card;
+                break;
+            }
+        }
+        
+        if (targetCard == null) {
+            log.warn("매거진의 모든 카드에 Place가 이미 매핑되어 있습니다: magazineId={}", magazineId);
+            return null;
+        }
+        
+        // 3. Place 조회 및 유효성 검사
+        Place place = placeRepository.findById(placeId)
+                .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다: " + placeId));
+        
+        if (!place.isEnabled()) {
+            throw new RuntimeException("비활성화된 장소는 매핑할 수 없습니다: " + placeId);
+        }
+        
+        // 4. 장소 매핑
+        targetCard.updatePlace(place);
+        magazineCardRepository.save(targetCard);
+        log.info("매거진 카드에 장소 자동 매핑 완료: magazineId={}, cardOrder={}, placeId={}", 
+                 magazineId, targetCard.getOrder(), placeId);
+        
+        return targetCard.getId();
+    }
+
+    /**
      * MagazineCard를 MagazineCardDto로 변환
      */
     private MagazineCardDto convertToCardDto(MagazineCard card) {

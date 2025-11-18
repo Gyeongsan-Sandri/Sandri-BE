@@ -4,16 +4,20 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import sandri.sandriweb.domain.magazine.dto.AddPlaceFromMagazineRequestDto;
 import sandri.sandriweb.domain.magazine.dto.MagazineDetailResponseDto;
 import sandri.sandriweb.domain.magazine.dto.MagazineListCursorResponseDto;
 import sandri.sandriweb.domain.magazine.dto.MagazinePlaceThumbnailDto;
 import sandri.sandriweb.domain.magazine.service.MagazineService;
 import sandri.sandriweb.domain.place.dto.SimplePlaceDto;
+import sandri.sandriweb.domain.place.entity.Place;
+import sandri.sandriweb.domain.place.service.PlaceService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
 import sandri.sandriweb.domain.user.entity.User;
 
@@ -27,6 +31,7 @@ import java.util.List;
 public class MagazineController {
 
     private final MagazineService magazineService;
+    private final PlaceService placeService;
 
     /**
      * 사용자 ID 추출 헬퍼 메서드
@@ -185,6 +190,45 @@ public class MagazineController {
             return handleRuntimeException(e, "매거진 카드뉴스에 매핑된 장소 목록 조회");
         } catch (Exception e) {
             return handleException(e, "매거진 카드뉴스에 매핑된 장소 목록 조회", "장소 목록을 조회하는 중 오류가 발생했습니다.");
+        }
+    }
+
+    @PostMapping("/{magazineId}/places/add-to-collection")
+    @Operation(summary = "매거진 장소 찾기 또는 생성",
+               description = "매거진에 나온 장소를 Place DB에서 찾거나 Google Maps API로 검색하여 생성합니다. " +
+                           "생성된 Place ID를 반환하며, 관리자가 직접 매거진 카드에 매핑해야 합니다.")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "추가 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "매거진 없음")
+    })
+    public ResponseEntity<ApiResponseDto<Long>> addPlaceToCollection(
+            @Parameter(description = "매거진 ID", example = "1")
+            @PathVariable Long magazineId,
+            @Valid @RequestBody AddPlaceFromMagazineRequestDto request,
+            @AuthenticationPrincipal User user) {
+
+        log.info("매거진 장소를 장소 모아보기에 추가: magazineId={}, placeName={}", magazineId, request.getPlaceName());
+
+        try {
+            if (user == null) {
+                return ResponseEntity.status(401)
+                        .body(ApiResponseDto.error("로그인이 필요합니다."));
+            }
+
+            // 매거진 존재 확인
+            magazineService.getMagazineDetail(magazineId, user.getId());
+
+            // 장소 이름으로 Place 찾기 또는 생성
+            Place place = placeService.findOrCreatePlaceByName(request.getPlaceName());
+            
+            // Place만 반환 (관리자가 직접 카드에 매핑해야 함)
+            return ResponseEntity.ok(ApiResponseDto.success("장소를 찾았습니다. 관리자가 매거진 카드에 매핑해주세요.", place.getId()));
+        } catch (RuntimeException e) {
+            return handleRuntimeException(e, "매거진 장소를 장소 모아보기에 추가");
+        } catch (Exception e) {
+            return handleException(e, "매거진 장소를 장소 모아보기에 추가", "장소 추가 중 오류가 발생했습니다.");
         }
     }
 
