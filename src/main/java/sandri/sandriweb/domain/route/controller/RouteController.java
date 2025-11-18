@@ -140,6 +140,27 @@ public class RouteController {
             return ResponseEntity.notFound().build();
         }
     }
+
+    @GetMapping("/hot")
+    @Operation(summary = "HOT 루트 조회",
+            description = "좋아요 수와 최근 활동 가중치를 기반으로 인기 공개 루트를 순위대로 반환합니다. " +
+                    "처음: limit=3 (3개), 더보기: limit=8 (8개), 더 더보기: limit=13 (13개)... 5개씩 증가 (최대: 20)")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청")
+    })
+    public ResponseEntity<ApiResponseDto<List<HotRouteDto>>> getHotRoutes(
+            @Parameter(description = "조회할 루트 개수 (처음: 3, 더보기: +5씩 증가, 최대: 20)", example = "3")
+            @RequestParam(name = "limit", required = false, defaultValue = "3") int limit) {
+
+        if (limit < 1 || limit > 20) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("limit은 1 이상 20 이하여야 합니다."));
+        }
+
+        List<HotRouteDto> hotRoutes = routeService.getHotRoutes(limit);
+        return ResponseEntity.ok(ApiResponseDto.success(hotRoutes));
+    }
     
     @GetMapping("/my")
     @Operation(

@@ -1,5 +1,6 @@
 package sandri.sandriweb.domain.route.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,6 +23,7 @@ public class RouteListDto {
     private Long creatorId;
     private String creatorName;
     private String creatorNickname;
+    @JsonProperty("public")
     private boolean isPublic;
     private String shareCode;
     private String imageUrl;

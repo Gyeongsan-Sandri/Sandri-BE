@@ -1,5 +1,6 @@
 package sandri.sandriweb.domain.route.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,6 +21,7 @@ public class UpdateRouteRequestDto {
     
     private LocalDate endDate;
     
+    @JsonProperty("public")
     private Boolean isPublic;
 
     private String imageUrl;
