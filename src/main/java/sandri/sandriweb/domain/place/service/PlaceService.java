@@ -6,6 +6,7 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -25,6 +26,7 @@ import sandri.sandriweb.domain.review.service.ReviewService;
 import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.global.service.GoogleGeocodingService;
+import sandri.sandriweb.global.service.GooglePlacesService;
 import sandri.sandriweb.global.service.S3Service;
 import sandri.sandriweb.global.service.dto.GeocodingResult;
 
@@ -47,7 +49,11 @@ public class PlaceService {
     private final UserPlaceRepository userPlaceRepository;
     private final UserRepository userRepository;
     private final GoogleGeocodingService googleGeocodingService;
+    private final GooglePlacesService googlePlacesService;
     private final S3Service s3Service;
+    
+    @Value("${google.maps.api-key}")
+    private String googleMapsApiKey;
     
     private static final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
@@ -468,6 +474,59 @@ public class PlaceService {
     }
 
     /**
+     * 장소 이름으로 Place를 찾거나 생성하고 장소 모아보기에 추가
+     * @param placeName 장소 이름
+     * @param userId 사용자 ID
+     * @return 추가된 Place ID
+     */
+    @Transactional
+    public Long addPlaceToCollectionByName(String placeName, Long userId) {
+        // Place 찾기 또는 생성
+        Place place = findOrCreatePlaceByName(placeName);
+        
+        // 장소 모아보기에 추가 (좋아요)
+        addToCollection(place.getId(), userId);
+        
+        return place.getId();
+    }
+
+    /**
+     * 장소를 장소 모아보기에 추가 (좋아요)
+     * @param placeId 장소 ID
+     * @param userId 사용자 ID
+     */
+    @Transactional
+    public void addToCollection(Long placeId, Long userId) {
+        // 이미 좋아요가 있는지 확인
+        java.util.Optional<UserPlace> existingUserPlace = userPlaceRepository.findByUserIdAndPlaceId(userId, placeId);
+        
+        if (existingUserPlace.isPresent()) {
+            UserPlace userPlace = existingUserPlace.get();
+            if (userPlace.isEnabled()) {
+                log.info("이미 장소 모아보기에 추가되어 있음: placeId={}, userId={}", placeId, userId);
+                return; // 이미 추가되어 있음
+            } else {
+                // 비활성화된 경우 재활성화
+                userPlace.enable();
+                userPlaceRepository.save(userPlace);
+                log.info("장소 모아보기 재활성화: placeId={}, userId={}", placeId, userId);
+                return;
+            }
+        }
+        
+        // 새로 추가
+        User user = userRepository.getReferenceById(userId);
+        Place place = placeRepository.getReferenceById(placeId);
+        UserPlace newUserPlace = UserPlace.builder()
+                .user(user)
+                .place(place)
+                .enabled(true)  // 명시적으로 enabled 설정
+                .build();
+        userPlaceRepository.save(newUserPlace);
+        log.info("장소 모아보기에 추가 완료: placeId={}, userId={}", placeId, userId);
+    }
+
+    /**
      * 장소 좋아요 토글
      * @param placeId 장소 ID
      * @param userId 사용자 ID
@@ -510,6 +569,130 @@ public class PlaceService {
                     userPlaceRepository.save(newUserPlace);
                     return true;
                 });
+    }
+
+    /**
+     * 장소 이름으로 Place 찾기 또는 생성 (DB 우선, 없으면 Google Places 검색)
+     * @param placeName 장소 이름
+     * @return 찾거나 생성된 Place
+     */
+    @Transactional
+    public Place findOrCreatePlaceByName(String placeName) {
+        if (placeName == null || placeName.trim().isEmpty()) {
+            throw new RuntimeException("장소 이름은 필수입니다");
+        }
+
+        String trimmedName = placeName.trim();
+        
+        // 1단계: DB에서 먼저 검색
+        java.util.Optional<Place> existingPlace = placeRepository.findByName(trimmedName);
+        if (existingPlace.isPresent()) {
+            log.info("DB에서 장소 찾음: placeId={}, name={}", existingPlace.get().getId(), trimmedName);
+            return existingPlace.get();
+        }
+
+        // 2단계: DB에 없으면 Google Places API로 검색
+        log.info("DB에 장소 없음. Google Places API로 검색: name={}", trimmedName);
+        List<GooglePlacesService.PlaceSearchResult> googleResults = googlePlacesService.searchPlaces(trimmedName, "ko", "kr");
+        
+        if (googleResults == null || googleResults.isEmpty()) {
+            throw new RuntimeException("장소를 찾을 수 없습니다. DB와 Google Maps 모두에서 검색했지만 결과가 없습니다: " + trimmedName);
+        }
+
+        // 첫 번째 결과 사용
+        GooglePlacesService.PlaceSearchResult googleResult = googleResults.get(0);
+        
+        // Google Places 정보로 Place 생성
+        PlaceCategory group = extractGroupFromTypes(googleResult.getTypes());
+        Category category = extractCategoryFromTypes(googleResult.getTypes());
+
+        // 좌표 생성
+        if (googleResult.getLatitude() == null || googleResult.getLongitude() == null) {
+            throw new RuntimeException("장소의 위치 정보를 찾을 수 없습니다: " + trimmedName);
+        }
+
+        Coordinate coordinate = new Coordinate(
+                googleResult.getLongitude(),
+                googleResult.getLatitude()
+        );
+        Point location = geometryFactory.createPoint(coordinate);
+
+        // Place 생성
+        Place place = Place.builder()
+                .name(trimmedName)
+                .address(googleResult.getAddress())
+                .location(location)
+                .summery(null)
+                .information(null)
+                .group(group)
+                .category(category)
+                .build();
+
+        Place savedPlace = placeRepository.save(place);
+        log.info("Google Places 정보로 장소 생성 완료: placeId={}, name={}", savedPlace.getId(), trimmedName);
+
+        // 사진이 있으면 PlacePhoto 추가
+        if (googleResult.getPhotoReference() != null) {
+            String photoUrl = googleResult.getPhotoUrl(googleMapsApiKey, 800);
+            if (photoUrl != null) {
+                PlacePhoto placePhoto = PlacePhoto.builder()
+                        .place(savedPlace)
+                        .photoUrl(photoUrl)
+                        .order(0)
+                        .build();
+                placePhotoRepository.save(placePhoto);
+                log.info("Google Places 사진 추가: placeId={}, photoUrl={}", savedPlace.getId(), photoUrl);
+            }
+        }
+
+        return savedPlace;
+    }
+
+    /**
+     * Google Places types에서 대분류 추출
+     */
+    private PlaceCategory extractGroupFromTypes(List<String> types) {
+        if (types == null || types.isEmpty()) {
+            return PlaceCategory.관광지; // 기본값
+        }
+
+        for (String type : types) {
+            if (type.contains("restaurant") || type.contains("food") || type.contains("meal")) {
+                return PlaceCategory.맛집;
+            } else if (type.contains("cafe") || type.contains("coffee")) {
+                return PlaceCategory.카페;
+            } else if (type.contains("tourist") || type.contains("museum") || type.contains("park") || 
+                       type.contains("attraction") || type.contains("point_of_interest")) {
+                return PlaceCategory.관광지;
+            }
+        }
+        return PlaceCategory.관광지; // 기본값
+    }
+
+    /**
+     * Google Places types에서 세부 카테고리 추출
+     */
+    private Category extractCategoryFromTypes(List<String> types) {
+        if (types == null || types.isEmpty()) {
+            return Category.자연_힐링; // 기본값
+        }
+
+        for (String type : types) {
+            if (type.contains("restaurant") || type.contains("food") || type.contains("meal") || 
+                type.contains("cafe") || type.contains("coffee")) {
+                return Category.식도락;
+            } else if (type.contains("natural") || type.contains("park") || type.contains("hiking") || 
+                       type.contains("beach") || type.contains("mountain")) {
+                return Category.자연_힐링;
+            } else if (type.contains("museum") || type.contains("art") || type.contains("gallery") || 
+                       type.contains("theater") || type.contains("stadium")) {
+                return Category.문화_체험;
+            } else if (type.contains("temple") || type.contains("church") || type.contains("shrine") || 
+                       type.contains("historical") || type.contains("monument")) {
+                return Category.역사_전통;
+            }
+        }
+        return Category.자연_힐링; // 기본값
     }
 
     /**

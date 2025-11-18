@@ -276,6 +276,36 @@ public class RouteController {
         }
     }
     
+    @PostMapping("/{routeId}/locations")
+    @Operation(summary = "장소 추가", description = "루트에 새로운 장소를 추가합니다")
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "추가 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "루트 없음")
+    })
+    public ResponseEntity<ApiResponseDto<RouteResponseDto.LocationDto>> addLocation(
+            @PathVariable Long routeId,
+            @Valid @RequestBody AddLocationRequestDto request,
+            Authentication authentication) {
+
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+
+        log.info("장소 추가 요청: 루트ID={}, 장소ID={}, 일차={}, 사용자={}", routeId, request.getPlaceId(), request.getDayNumber(), username);
+        ApiResponseDto<RouteResponseDto.LocationDto> response = routeService.addLocation(routeId, request, user);
+
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else if (response.getMessage() != null && response.getMessage().contains("권한")) {
+            return ResponseEntity.status(403).body(response);
+        } else if (response.getMessage() != null && response.getMessage().contains("찾을 수 없습니다")) {
+            return ResponseEntity.status(404).body(response);
+        }
+        return ResponseEntity.badRequest().body(response);
+    }
+
     @PutMapping("/{routeId}/locations/{locationId}/memo")
     @Operation(summary = "장소 메모 저장", description = "루트 내 특정 장소에 대한 메모를 저장하거나 수정합니다")
     @ApiResponses(value = {
