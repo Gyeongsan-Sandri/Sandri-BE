@@ -22,8 +22,11 @@ import sandri.sandriweb.domain.place.enums.PlaceCategory;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 
 import java.io.BufferedReader;
+import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -48,6 +51,64 @@ public class CsvImportService {
     private static final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
     private static final String TARGET_PROVINCE = "경상북도";
     private static final String TARGET_CITY = "경산시";
+
+    /**
+     * 서버 내부 CSV 파일에서 경산시 매장 정보를 추출하여 DB에 저장
+     * @param fileName CSV 파일명 (datafile 폴더 내)
+     * @param mode "insert" (신규만 추가) 또는 "upsert" (업데이트 포함)
+     * @return 처리 결과 메시지
+     */
+    public String importStoresFromLocalFile(String fileName, String mode) {
+        int totalImported = 0;
+        int totalFailed = 0;
+        int totalSkipped = 0;
+        int totalFiltered = 0;
+
+        log.info("로컬 CSV 파일 임포트 시작: filename={}, mode={}", fileName, mode);
+
+        try {
+            // 파일 경로 생성 (프로젝트 루트/datafile/파일명)
+            Path csvPath = Paths.get("datafile", fileName);
+            log.info("CSV 파일 경로: {}", csvPath.toAbsolutePath());
+
+            // CSV 파일 파싱
+            List<StoreCsvDto> stores = parseCsvFileFromPath(csvPath);
+            log.info("CSV 파일 파싱 완료: 총 {} 개 행", stores.size());
+
+            // 경산시 필터링
+            List<StoreCsvDto> filteredStores = stores.stream()
+                    .filter(store -> TARGET_PROVINCE.equals(store.getProvince())
+                                  && TARGET_CITY.equals(store.getCity()))
+                    .collect(Collectors.toList());
+
+            totalFiltered = stores.size() - filteredStores.size();
+            log.info("필터링 완료: {} 개 매장 (제외: {} 개)", filteredStores.size(), totalFiltered);
+
+            // 각 매장 처리
+            for (StoreCsvDto store : filteredStores) {
+                try {
+                    boolean success = self.processStore(store, mode);  // Self-injection으로 호출
+                    if (success) {
+                        totalImported++;
+                    } else {
+                        totalSkipped++;
+                    }
+                } catch (Exception e) {
+                    log.error("매장 처리 중 오류: name={}, error={}", store.getStoreName(), e.getMessage());
+                    totalFailed++;
+                }
+            }
+
+            String result = String.format("CSV 임포트 완료 - 성공: %d, 실패: %d, 유지: %d, 경산시 외 제외: %d",
+                totalImported, totalFailed, totalSkipped, totalFiltered);
+            log.info(result);
+            return result;
+
+        } catch (Exception e) {
+            log.error("CSV 임포트 중 오류 발생", e);
+            throw new RuntimeException("CSV 임포트 실패: " + e.getMessage(), e);
+        }
+    }
 
     /**
      * CSV 파일에서 경산시 매장 정보를 추출하여 DB에 저장
@@ -237,7 +298,27 @@ public class CsvImportService {
     }
 
     /**
-     * CSV 파일 파싱
+     * 로컬 파일 경로에서 CSV 파일 파싱
+     */
+    private List<StoreCsvDto> parseCsvFileFromPath(Path filePath) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new FileInputStream(filePath.toFile()), StandardCharsets.UTF_8))) {
+
+            CsvToBean<StoreCsvDto> csvToBean = new CsvToBeanBuilder<StoreCsvDto>(reader)
+                    .withType(StoreCsvDto.class)
+                    .withIgnoreLeadingWhiteSpace(true)
+                    .build();
+
+            return csvToBean.parse();
+
+        } catch (Exception e) {
+            log.error("CSV 파일 파싱 실패: {}", filePath, e);
+            throw new RuntimeException("CSV 파일 파싱 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * CSV 파일 파싱 (MultipartFile)
      */
     private List<StoreCsvDto> parseCsvFile(MultipartFile file) {
         try (BufferedReader reader = new BufferedReader(

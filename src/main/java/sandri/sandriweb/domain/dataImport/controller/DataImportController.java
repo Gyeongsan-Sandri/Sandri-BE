@@ -1,12 +1,14 @@
 package sandri.sandriweb.domain.dataImport.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 import sandri.sandriweb.domain.dataImport.service.CsvImportService;
 import sandri.sandriweb.domain.dataImport.service.GBGSDataImportService;
 import sandri.sandriweb.domain.user.dto.ApiResponseDto;
@@ -61,16 +63,37 @@ public class DataImportController {
     }
 
     @PostMapping("/csv")
-    @Operation(summary = "CSV 파일로 장소 데이터 임포트",
-               description = "CSV 파일을 업로드하여 경산시(경상북도) 매장 정보를 DB에 저장합니다. " +
-                             "Google Place API로 검색하여 정보를 찾으면 Google 데이터를 우선 사용하고, " +
-                             "찾지 못하면 CSV 데이터를 직접 사용하여 저장합니다. " +
-                             "mode=insert (기본값): 신규 장소만 추가, 기존 장소는 건드리지 않음. " +
-                             "mode=upsert: 신규 추가 + 기존 장소 업데이트.")
+    @Operation(
+            summary = "CSV 파일로 장소 데이터 임포트",
+            description = "서버의 datafile 폴더에 있는 CSV 파일을 읽어 경산시(경상북도) 매장 정보를 DB에 저장합니다.\n\n" +
+                         "**처리 과정:**\n" +
+                         "1. CSV 파일에서 경산시 매장 정보 추출\n" +
+                         "2. Google Place API로 검색하여 장소 정보 조회\n" +
+                         "3. Google 데이터가 있으면 우선 사용, 없으면 CSV 데이터 직접 사용\n\n" +
+                         "**모드 설명:**\n" +
+                         "- `insert` (기본값): 신규 장소만 추가, 기존 장소는 건드리지 않음\n" +
+                         "- `upsert`: 신규 추가 + 기존 장소 업데이트\n\n" +
+                         "**주의:** 이 작업은 시간이 오래 걸릴 수 있습니다."
+    )
     public ResponseEntity<ApiResponseDto<String>> importFromCsv(
-            @RequestParam("file") MultipartFile file,
+            @Parameter(
+                    description = "CSV 파일명 (datafile 폴더 내)",
+                    required = true,
+                    example = "경북_상가정보_시군구코드_47290.csv"
+            )
+            @RequestParam("fileName") String fileName,
+
+            @Parameter(
+                    description = "임포트 모드",
+                    schema = @Schema(
+                            type = "string",
+                            defaultValue = "insert",
+                            allowableValues = {"insert", "upsert"}
+                    )
+            )
             @RequestParam(value = "mode", defaultValue = "insert") String mode) {
-        log.info("CSV 데이터 임포트 요청: filename={}, mode={}", file.getOriginalFilename(), mode);
+
+        log.info("CSV 데이터 임포트 요청: fileName={}, mode={}", fileName, mode);
 
         // mode 검증
         if (!mode.equals("insert") && !mode.equals("upsert")) {
@@ -79,7 +102,7 @@ public class DataImportController {
         }
 
         try {
-            String result = csvImportService.importStoresFromCsv(file, mode);
+            String result = csvImportService.importStoresFromLocalFile(fileName, mode);
             return ResponseEntity.ok(ApiResponseDto.success(result));
 
         } catch (Exception e) {
