@@ -84,10 +84,9 @@ public class DataImportController {
             @RequestParam("fileName") String fileName,
 
             @Parameter(
-                    description = "임포트 모드",
+                    description = "임포트 모드 (기본값: insert)",
                     schema = @Schema(
                             type = "string",
-                            defaultValue = "insert",
                             allowableValues = {"insert", "upsert"}
                     )
             )
