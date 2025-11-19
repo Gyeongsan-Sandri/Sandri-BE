@@ -336,8 +336,9 @@ public class UserController {
     
     @PostMapping("/travel-style/places")
     @Operation(
-            summary = "여행 스타일에 장소 매핑",
-            description = "여행 스타일(tourtype)에 장소를 매핑합니다. 같은 여행 스타일과 장소의 중복 매핑은 불가능합니다. " +
+            summary = "여행 스타일에 장소 매핑 (여러 개)",
+            description = "여행 스타일(tourtype)에 여러 장소를 한 번에 매핑합니다. 같은 여행 스타일과 장소의 중복 매핑은 불가능합니다. " +
+                         "일부 장소만 매핑에 실패해도 성공한 장소는 매핑됩니다. " +
                          "가능한 여행 스타일: ADVENTURER(모험왕), SENSITIVE_FAIRY(감성요정), HOTSPOT_HUNTER(핫플 헌터), " +
                          "LOCAL(현지인), THOROUGH_PLANNER(철저 플래너), HEALING_TURTLE(힐링 거북이), " +
                          "WALKER(산책가), GALLERY_PEOPLE(갤러리피플)",
@@ -348,25 +349,25 @@ public class UserController {
                             schema = @Schema(implementation = MapTravelStylePlaceRequestDto.class),
                             examples = @ExampleObject(
                                     name = "여행 스타일-장소 매핑 예제",
-                                    value = "{\n  \"travelStyle\": \"ADVENTURER\",\n  \"placeId\": 1\n}"
+                                    value = "{\n  \"travelStyle\": \"ADVENTURER\",\n  \"placeIds\": [1, 2, 3]\n}"
                             )
                     )
             )
     )
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "매핑 성공"),
-            @ApiResponse(responseCode = "400", description = "잘못된 요청 (장소 없음, 이미 매핑됨)"),
+            @ApiResponse(responseCode = "200", description = "매핑 성공 (일부 실패해도 성공한 것만 반환)"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 (모든 장소 매핑 실패)"),
             @ApiResponse(responseCode = "401", description = "인증 필요")
     })
-    public ResponseEntity<ApiResponseDto<Long>> mapPlaceToTravelStyle(
+    public ResponseEntity<ApiResponseDto<List<Long>>> mapPlaceToTravelStyle(
             @Valid @org.springframework.web.bind.annotation.RequestBody MapTravelStylePlaceRequestDto request,
             Authentication authentication) {
         
         String username = authentication.getName();
-        log.info("여행 스타일-장소 매핑 요청: 사용자={}, travelStyle={}, placeId={}", 
-                username, request.getTravelStyle(), request.getPlaceId());
+        log.info("여행 스타일-장소 매핑 요청: 사용자={}, travelStyle={}, placeIds={}", 
+                username, request.getTravelStyle(), request.getPlaceIds());
         
-        ApiResponseDto<Long> response = userService.mapPlaceToTravelStyle(request);
+        ApiResponseDto<List<Long>> response = userService.mapPlaceToTravelStyle(request);
         
         if (response.isSuccess()) {
             return ResponseEntity.ok(response);
