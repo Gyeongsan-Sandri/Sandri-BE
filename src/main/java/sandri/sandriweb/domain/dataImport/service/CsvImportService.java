@@ -19,6 +19,7 @@ import sandri.sandriweb.domain.place.entity.PlacePhoto;
 import sandri.sandriweb.domain.place.enums.Category;
 import sandri.sandriweb.domain.place.enums.DataSource;
 import sandri.sandriweb.domain.place.enums.PlaceCategory;
+import sandri.sandriweb.domain.place.repository.PlacePhotoRepository;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 
 import java.io.BufferedReader;
@@ -37,13 +38,16 @@ import java.util.stream.Collectors;
 public class CsvImportService {
 
     private final PlaceRepository placeRepository;
+    private final PlacePhotoRepository placePhotoRepository;
     private final GooglePlaceService googlePlaceService;
     private final CsvImportService self;  // Self-injection for @Transactional(REQUIRES_NEW)
 
     public CsvImportService(PlaceRepository placeRepository,
+                           PlacePhotoRepository placePhotoRepository,
                            GooglePlaceService googlePlaceService,
                            @org.springframework.context.annotation.Lazy CsvImportService self) {
         this.placeRepository = placeRepository;
+        this.placePhotoRepository = placePhotoRepository;
         this.googlePlaceService = googlePlaceService;
         this.self = self;
     }
@@ -294,9 +298,56 @@ public class CsvImportService {
         Category newCategory = mapIndustryCodeToCategory(csvData.getIndustryCode());
 
         // 우선순위 기반 업데이트
-        return place.updateWithPriority(null, null, newLocation, newSummary,
-                                       newInformation, newGroup, newCategory,
-                                       dataSource);
+        boolean updated = place.updateWithPriority(null, null, newLocation, newSummary,
+                                                   newInformation, newGroup, newCategory,
+                                                   dataSource);
+        
+        // 사진 업데이트 (항상 수행)
+        updatePlacePhotos(place, placeDetails);
+        
+        return updated;
+    }
+    
+    /**
+     * Place의 사진 업데이트 (기존 사진 disable 후 새 사진 추가)
+     */
+    private void updatePlacePhotos(Place place, GooglePlaceDetailsResponse placeDetails) {
+        // 기존 enabled된 사진들을 disable 처리
+        List<PlacePhoto> existingPhotos = placePhotoRepository.findByPlaceId(place.getId());
+        for (PlacePhoto photo : existingPhotos) {
+            if (photo.isEnabled()) {
+                photo.disable();
+                placePhotoRepository.save(photo);
+            }
+        }
+        
+        // 새 사진 추가 (Google Place Details 사진만, 최대 10장)
+        if (placeDetails != null && placeDetails.getPhotos() != null && !placeDetails.getPhotos().isEmpty()) {
+            List<PlacePhoto> newPhotos = new ArrayList<>();
+            int photoOrder = 0;
+            
+            for (GooglePlaceDetailsResponse.Photo photo : placeDetails.getPhotos()) {
+                if (photoOrder >= 10) break; // 최대 10장까지
+                
+                // New Places API photo URL 생성
+                String photoUrl = googlePlaceService.getPhotoUrlFromName(photo.getName(), 800);
+                
+                PlacePhoto placePhoto = PlacePhoto.builder()
+                        .place(place)
+                        .photoUrl(photoUrl)
+                        .order(photoOrder++)
+                        .enabled(true)
+                        .build();
+                
+                newPhotos.add(placePhoto);
+            }
+            
+            // 새 사진 저장
+            if (!newPhotos.isEmpty()) {
+                placePhotoRepository.saveAll(newPhotos);
+                log.info("장소 사진 업데이트 완료: placeId={}, photoCount={}", place.getId(), newPhotos.size());
+            }
+        }
     }
 
     /**

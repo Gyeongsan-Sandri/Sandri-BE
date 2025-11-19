@@ -20,6 +20,7 @@ import sandri.sandriweb.domain.place.entity.PlacePhoto;
 import sandri.sandriweb.domain.place.enums.Category;
 import sandri.sandriweb.domain.place.enums.PlaceCategory;
 import sandri.sandriweb.domain.place.enums.DataSource;
+import sandri.sandriweb.domain.place.repository.PlacePhotoRepository;
 import sandri.sandriweb.domain.place.repository.PlaceRepository;
 
 import java.util.ArrayList;
@@ -30,6 +31,7 @@ import java.util.List;
 public class GBGSDataImportService {
 
     private final PlaceRepository placeRepository;
+    private final PlacePhotoRepository placePhotoRepository;
     private final GooglePlaceService googlePlaceService;
     private final EntityManager entityManager;
     private final GBGSDataImportService self;  // Self-injection for @Transactional(REQUIRES_NEW)
@@ -37,10 +39,12 @@ public class GBGSDataImportService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public GBGSDataImportService(PlaceRepository placeRepository,
+                                PlacePhotoRepository placePhotoRepository,
                                 GooglePlaceService googlePlaceService,
                                 EntityManager entityManager,
                                 @org.springframework.context.annotation.Lazy GBGSDataImportService self) {
         this.placeRepository = placeRepository;
+        this.placePhotoRepository = placePhotoRepository;
         this.googlePlaceService = googlePlaceService;
         this.entityManager = entityManager;
         this.self = self;
@@ -303,9 +307,73 @@ public class GBGSDataImportService {
         Category newCategory = mapCodeToCategory(categoryCode);
 
         // 우선순위 기반 업데이트 (GBGS가 최우선)
-        return place.updateWithPriority(null, null, newLocation, newSummary,
-                                       newInformation, newGroup, newCategory,
-                                       DataSource.GBGS);
+        boolean updated = place.updateWithPriority(null, null, newLocation, newSummary,
+                                                   newInformation, newGroup, newCategory,
+                                                   DataSource.GBGS);
+        
+        // 사진 업데이트 (항상 수행)
+        updatePlacePhotos(place, item, placeDetails);
+        
+        return updated;
+    }
+    
+    /**
+     * Place의 사진 업데이트 (기존 사진 disable 후 새 사진 추가)
+     */
+    private void updatePlacePhotos(Place place, GbgsTourApiResponse.TourItem item,
+                                   GooglePlaceDetailsResponse placeDetails) {
+        // 기존 enabled된 사진들을 disable 처리
+        List<PlacePhoto> existingPhotos = placePhotoRepository.findByPlaceId(place.getId());
+        for (PlacePhoto photo : existingPhotos) {
+            if (photo.isEnabled()) {
+                photo.disable();
+                placePhotoRepository.save(photo);
+            }
+        }
+        
+        // 새 사진 추가
+        List<PlacePhoto> newPhotos = new ArrayList<>();
+        int photoOrder = 0;
+        
+        // 1. 경산시 API 이미지 우선 추가
+        String gbgsImageUrl = item.getImage() != null && !item.getImage().isEmpty()
+                ? item.getImage()
+                : item.getImageUrl();
+        
+        if (gbgsImageUrl != null && !gbgsImageUrl.isEmpty()) {
+            PlacePhoto gbgsPhoto = PlacePhoto.builder()
+                    .place(place)
+                    .photoUrl(gbgsImageUrl)
+                    .order(photoOrder++)
+                    .enabled(true)
+                    .build();
+            newPhotos.add(gbgsPhoto);
+        }
+        
+        // 2. Google Place Details 사진 추가 (경산시 이미지 다음에, 최대 10장)
+        if (placeDetails != null && placeDetails.getPhotos() != null && !placeDetails.getPhotos().isEmpty()) {
+            for (GooglePlaceDetailsResponse.Photo photo : placeDetails.getPhotos()) {
+                if (photoOrder >= 11) break; // 경산시 이미지 1장 + Google 10장 = 최대 11장
+                
+                // New Places API photo URL 생성
+                String photoUrl = googlePlaceService.getPhotoUrlFromName(photo.getName(), 800);
+                
+                PlacePhoto placePhoto = PlacePhoto.builder()
+                        .place(place)
+                        .photoUrl(photoUrl)
+                        .order(photoOrder++)
+                        .enabled(true)
+                        .build();
+                
+                newPhotos.add(placePhoto);
+            }
+        }
+        
+        // 새 사진 저장
+        if (!newPhotos.isEmpty()) {
+            placePhotoRepository.saveAll(newPhotos);
+            log.info("장소 사진 업데이트 완료: placeId={}, photoCount={}", place.getId(), newPhotos.size());
+        }
     }
 
     /**
