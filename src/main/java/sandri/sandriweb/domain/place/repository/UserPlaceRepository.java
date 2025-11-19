@@ -48,15 +48,16 @@ public interface UserPlaceRepository extends JpaRepository<UserPlace, Long> {
     List<sandri.sandriweb.domain.place.entity.Place> findLikedPlacesByUserId(@Param("userId") Long userId);
 
     /**
-     * 최근 기간 가중치 기반 HOT 관광지 집계
+     * 최근 기간 가중치 기반 HOT 관광지 집계 (좋아요 0개인 장소도 포함)
      */
-    @Query(value = "SELECT up.place_id AS placeId, " +
-            "COUNT(*) AS totalLikes, " +
-            "SUM(CASE WHEN up.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END) AS recentLikes " +
-            "FROM place_likes up " +
-            "WHERE up.enabled = true " +
-            "GROUP BY up.place_id " +
-            "ORDER BY (COUNT(*) + :alpha * SUM(CASE WHEN up.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END)) DESC " +
+    @Query(value = "SELECT p.id AS placeId, " +
+            "COALESCE(COUNT(up.id), 0) AS totalLikes, " +
+            "COALESCE(SUM(CASE WHEN up.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END), 0) AS recentLikes " +
+            "FROM places p " +
+            "LEFT JOIN place_likes up ON p.id = up.place_id AND up.enabled = true " +
+            "WHERE p.enabled = true " +
+            "GROUP BY p.id " +
+            "ORDER BY (COALESCE(COUNT(up.id), 0) + :alpha * COALESCE(SUM(CASE WHEN up.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END), 0)) DESC " +
             "LIMIT :limit", nativeQuery = true)
     List<Object[]> findHotPlaces(@Param("limit") int limit,
                                  @Param("recentDays") int recentDays,

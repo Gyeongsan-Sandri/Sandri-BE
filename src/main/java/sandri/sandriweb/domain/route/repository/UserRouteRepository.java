@@ -26,16 +26,16 @@ public interface UserRouteRepository extends JpaRepository<UserRoute, Long> {
     List<UserRoute> findAllEnabledByUserId(@Param("userId") Long userId);
 
     /**
-     * 최근 기간 가중치 기반 HOT 루트 집계 (공개 루트만)
+     * 최근 기간 가중치 기반 HOT 루트 집계 (공개 루트만, 좋아요 0개인 루트도 포함)
      */
-    @Query(value = "SELECT ur.route_id AS routeId, " +
-            "COUNT(*) AS totalLikes, " +
-            "SUM(CASE WHEN ur.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END) AS recentLikes " +
-            "FROM route_likes ur " +
-            "JOIN routes r ON ur.route_id = r.id " +
-            "WHERE ur.enabled = true AND r.is_public = true " +
-            "GROUP BY ur.route_id " +
-            "ORDER BY (COUNT(*) + :alpha * SUM(CASE WHEN ur.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END)) DESC " +
+    @Query(value = "SELECT r.id AS routeId, " +
+            "COALESCE(COUNT(ur.id), 0) AS totalLikes, " +
+            "COALESCE(SUM(CASE WHEN ur.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END), 0) AS recentLikes " +
+            "FROM routes r " +
+            "LEFT JOIN route_likes ur ON r.id = ur.route_id AND ur.enabled = true " +
+            "WHERE r.enabled = true AND r.is_public = true " +
+            "GROUP BY r.id " +
+            "ORDER BY (COALESCE(COUNT(ur.id), 0) + :alpha * COALESCE(SUM(CASE WHEN ur.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END), 0)) DESC " +
             "LIMIT :limit", nativeQuery = true)
     List<Object[]> findHotRoutes(@Param("limit") int limit,
                                  @Param("recentDays") int recentDays,

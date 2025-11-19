@@ -89,7 +89,7 @@ public interface PlaceReviewRepository extends JpaRepository<PlaceReview, Long> 
      * @param placeId 장소 ID
      * @return 리뷰 개수
      */
-    @Query("SELECT COUNT(r) FROM PlaceReview r WHERE r.place.id = :placeId AND r.enabled = true")
+    @Query(value = "SELECT COUNT(*) FROM place_reviews WHERE place_id = :placeId AND enabled = 1", nativeQuery = true)
     Long countByPlaceId(@Param("placeId") Long placeId);
     
     /**
