@@ -93,9 +93,10 @@ public class S3ServiceImpl implements S3Service {
                 uniqueFileName
         )
                 .withMethod(HttpMethod.PUT)
-                .withExpiration(expiration)
-                .withContentType(contentType);
-        
+                .withExpiration(expiration);
+
+        generatePresignedUrlRequest.addRequestParameter("Content-Type", contentType);
+
         // Presigned URL 생성
         URL presignedUrl = amazonS3Client.generatePresignedUrl(generatePresignedUrlRequest);
         
