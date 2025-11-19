@@ -27,15 +27,17 @@ public interface UserRouteRepository extends JpaRepository<UserRoute, Long> {
 
     /**
      * 최근 기간 가중치 기반 HOT 루트 집계 (공개 루트만, 좋아요 0개인 루트도 포함)
+     * 좋아요가 0개인 루트도 포함하기 위해 최신순을 보조 정렬 기준으로 사용
      */
     @Query(value = "SELECT r.id AS routeId, " +
-            "COALESCE(COUNT(ur.id), 0) AS totalLikes, " +
+            "COALESCE(COUNT(ur.route_likes_id), 0) AS totalLikes, " +
             "COALESCE(SUM(CASE WHEN ur.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END), 0) AS recentLikes " +
             "FROM routes r " +
             "LEFT JOIN route_likes ur ON r.id = ur.route_id AND ur.enabled = true " +
-            "WHERE r.enabled = true AND r.is_public = true " +
+            "WHERE r.is_public = true " +
             "GROUP BY r.id " +
-            "ORDER BY (COALESCE(COUNT(ur.id), 0) + :alpha * COALESCE(SUM(CASE WHEN ur.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END), 0)) DESC " +
+            "ORDER BY (COALESCE(COUNT(ur.route_likes_id), 0) + :alpha * COALESCE(SUM(CASE WHEN ur.updated_at >= DATE_SUB(NOW(), INTERVAL :recentDays DAY) THEN 1 ELSE 0 END), 0)) DESC, " +
+            "         r.created_at DESC " +
             "LIMIT :limit", nativeQuery = true)
     List<Object[]> findHotRoutes(@Param("limit") int limit,
                                  @Param("recentDays") int recentDays,

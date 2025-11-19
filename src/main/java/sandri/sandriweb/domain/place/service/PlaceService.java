@@ -1022,16 +1022,20 @@ public class PlaceService {
         int fetchSize = Math.min(Math.max(limit, 1), 20);
 
         List<Object[]> ranking = userPlaceRepository.findHotPlaces(fetchSize, HOT_RECENT_DAYS, HOT_ALPHA);
+        log.info("HOT 관광지 쿼리 결과: {} 개", ranking.size());
         if (ranking.isEmpty()) {
+            log.warn("HOT 관광지 없음 - enabled된 장소가 없거나 좋아요가 없습니다");
             return List.of();
         }
 
         List<Long> placeIds = ranking.stream()
                 .map(row -> ((Number) row[0]).longValue())
                 .collect(Collectors.toList());
+        log.info("HOT 관광지 ID 목록: {}", placeIds);
 
         Map<Long, Place> placeMap = placeRepository.findAllById(placeIds).stream()
                 .collect(Collectors.toMap(Place::getId, place -> place));
+        log.info("조회된 장소 개수: {} / 요청한 ID 개수: {}", placeMap.size(), placeIds.size());
 
         Map<Long, String> thumbnailMap = placePhotoRepository.findFirstPhotoUrlByPlaceIdIn(placeIds).stream()
                 .collect(Collectors.toMap(
@@ -1045,11 +1049,15 @@ public class PlaceService {
             Long placeId = ((Number) row[0]).longValue();
             Place place = placeMap.get(placeId);
             if (place == null) {
+                log.warn("장소 ID {} 를 찾을 수 없습니다", placeId);
                 continue;
             }
 
             Long totalLikes = row[1] != null ? ((Number) row[1]).longValue() : 0L;
             Long recentLikes = row[2] != null ? ((Number) row[2]).longValue() : 0L;
+
+            log.info("HOT 관광지 순위 {}: ID={}, 이름={}, 총좋아요={}, 최근좋아요={}", 
+                    rank, placeId, place.getName(), totalLikes, recentLikes);
 
             hotPlaces.add(HotPlaceDto.builder()
                     .rank(rank++)
@@ -1067,6 +1075,7 @@ public class PlaceService {
             }
         }
 
+        log.info("최종 반환할 HOT 관광지 개수: {}", hotPlaces.size());
         return hotPlaces;
     }
 }

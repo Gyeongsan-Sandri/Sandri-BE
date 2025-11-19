@@ -83,6 +83,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/me/recent-searches").permitAll() // 최근 검색어 조회 (로그인 없이도 가능)
                         .requestMatchers("/api/me/**").authenticated() // 나머지 마이페이지 관련 API는 인증 필요
                         .requestMatchers("/api/admin/**").permitAll() // 관리자 API는 인증 없이 가능 (더 구체적인 경로 이후에 배치)
+                        .requestMatchers("/api/routes/hot").permitAll() // HOT 루트 조회는 로그인 없이 가능
+                        .requestMatchers("/api/routes/search").permitAll() // 루트 검색은 로그인 없이 가능
                         .requestMatchers("/api/routes/share/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated()
