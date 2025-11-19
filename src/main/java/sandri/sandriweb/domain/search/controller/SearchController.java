@@ -97,20 +97,31 @@ public class SearchController {
 
     @GetMapping("/me/recent-searches")
     @Operation(summary = "최근 검색어 조회", 
-               description = "현재 로그인한 사용자의 최근 검색어 목록을 조회합니다. 최대 10개까지 반환됩니다.")
+               description = "현재 로그인한 사용자의 최근 검색어 목록을 조회합니다. 최대 10개까지 반환됩니다. 로그인하지 않은 경우 빈 목록을 반환합니다.")
     @ApiResponses(value = {
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공")
     })
     public ResponseEntity<ApiResponseDto<List<RecentSearchDto>>> getRecentSearches(
             Authentication authentication) {
 
-        String username = authentication.getName();
-        log.info("최근 검색어 조회 요청: username={}", username);
+        log.info("최근 검색어 조회 요청");
 
         try {
+            // 로그인하지 않은 경우 빈 목록 반환
+            if (authentication == null) {
+                return ResponseEntity.ok(ApiResponseDto.success(List.of()));
+            }
+
+            String username = authentication.getName();
+            log.info("최근 검색어 조회 요청: username={}", username);
+
             User user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다"));
+                    .orElse(null);
+
+            // 사용자를 찾을 수 없는 경우 빈 목록 반환
+            if (user == null) {
+                return ResponseEntity.ok(ApiResponseDto.success(List.of()));
+            }
 
             List<RecentSearchDto> response = searchService.getRecentSearches(user.getId());
             return ResponseEntity.ok(ApiResponseDto.success(response));
