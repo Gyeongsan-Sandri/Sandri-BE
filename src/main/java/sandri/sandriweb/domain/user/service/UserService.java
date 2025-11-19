@@ -12,6 +12,8 @@ import sandri.sandriweb.domain.review.repository.PlaceReviewRepository;
 import sandri.sandriweb.domain.user.dto.*;
 import sandri.sandriweb.domain.user.entity.User;
 import sandri.sandriweb.domain.user.entity.UserVisitedPlace;
+import sandri.sandriweb.domain.user.entity.TravelStylePlace;
+import sandri.sandriweb.domain.user.repository.TravelStylePlaceRepository;
 import sandri.sandriweb.domain.user.repository.UserRepository;
 import sandri.sandriweb.domain.user.repository.UserVisitedPlaceRepository;
 
@@ -31,6 +33,7 @@ public class UserService {
     private final PlaceRepository placeRepository;
     private final PlacePhotoRepository placePhotoRepository;
     private final PlaceReviewRepository placeReviewRepository;
+    private final TravelStylePlaceRepository travelStylePlaceRepository;
     @Transactional
     public ApiResponseDto<LoginResponseDto> login(LoginRequestDto request) {
         try {
@@ -312,6 +315,116 @@ public class UserService {
             
         } catch (Exception e) {
             log.error("닉네임 수정 실패: {}", e.getMessage());
+            return ApiResponseDto.error(e.getMessage());
+        }
+    }
+    
+    /**
+     * 여행 스타일별 장소 목록 조회 (이름과 썸네일)
+     * @param travelStyle 여행 스타일
+     * @return 장소 목록 (이름과 썸네일)
+     */
+    public ApiResponseDto<List<TravelStylePlaceResponseDto>> getPlacesByTravelStyle(User.TravelStyle travelStyle) {
+        try {
+            // 1. TravelStyle로 매핑된 Place 목록 조회
+            List<Place> places = travelStylePlaceRepository.findPlacesByTravelStyle(travelStyle);
+            
+            if (places.isEmpty()) {
+                return ApiResponseDto.success(List.of());
+            }
+            
+            // 2. 장소 ID 목록 추출
+            List<Long> placeIds = places.stream()
+                    .map(Place::getId)
+                    .collect(Collectors.toList());
+            
+            // 3. 배치로 썸네일 URL 조회 (N+1 문제 방지)
+            Map<Long, String> thumbnailMap = placePhotoRepository.findFirstPhotoUrlByPlaceIdIn(placeIds).stream()
+                    .collect(Collectors.toMap(
+                            result -> ((Number) result[0]).longValue(),
+                            result -> (String) result[1]
+                    ));
+            
+            // 4. DTO 변환
+            List<TravelStylePlaceResponseDto> responseDtos = places.stream()
+                    .map(place -> {
+                        String thumbnailUrl = thumbnailMap.get(place.getId());
+                        return TravelStylePlaceResponseDto.builder()
+                                .placeId(place.getId())
+                                .name(place.getName())
+                                .thumbnailUrl(thumbnailUrl)
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+            
+            return ApiResponseDto.success(responseDtos);
+            
+        } catch (Exception e) {
+            log.error("여행 스타일별 장소 목록 조회 실패: {}", e.getMessage());
+            return ApiResponseDto.error(e.getMessage());
+        }
+    }
+    
+    /**
+     * 여행 스타일에 장소 매핑 (여러 개)
+     * @param request 매핑 요청 (travelStyle, placeIds)
+     * @return 매핑 ID 목록
+     */
+    @Transactional
+    public ApiResponseDto<List<Long>> mapPlaceToTravelStyle(MapTravelStylePlaceRequestDto request) {
+        try {
+            List<Long> mappedIds = new java.util.ArrayList<>();
+            List<String> errors = new java.util.ArrayList<>();
+            
+            // 각 placeId에 대해 매핑 시도
+            for (Long placeId : request.getPlaceIds()) {
+                try {
+                    // 1. Place 존재 확인
+                    Place place = placeRepository.findById(placeId)
+                            .orElseThrow(() -> new RuntimeException("장소를 찾을 수 없습니다: placeId=" + placeId));
+                    
+                    // 2. 중복 매핑 확인
+                    travelStylePlaceRepository.findByTravelStyleAndPlaceId(request.getTravelStyle(), placeId)
+                            .ifPresent(existing -> {
+                                throw new RuntimeException("이미 매핑된 장소입니다: placeId=" + placeId);
+                            });
+                    
+                    // 3. 매핑 생성
+                    TravelStylePlace travelStylePlace = TravelStylePlace.builder()
+                            .travelStyle(request.getTravelStyle())
+                            .place(place)
+                            .build();
+                    
+                    TravelStylePlace saved = travelStylePlaceRepository.save(travelStylePlace);
+                    mappedIds.add(saved.getId());
+                    
+                } catch (Exception e) {
+                    log.warn("장소 매핑 실패: placeId={}, error={}", placeId, e.getMessage());
+                    errors.add("placeId " + placeId + ": " + e.getMessage());
+                }
+            }
+            
+            // 모든 매핑이 실패한 경우
+            if (mappedIds.isEmpty()) {
+                String errorMessage = "모든 장소 매핑에 실패했습니다. " + String.join(", ", errors);
+                return ApiResponseDto.error(errorMessage);
+            }
+            
+            // 일부 성공한 경우
+            if (errors.size() > 0) {
+                String message = mappedIds.size() + "개 장소가 매핑되었습니다. " + 
+                                errors.size() + "개 장소 매핑 실패: " + String.join(", ", errors);
+                return ApiResponseDto.success(message, mappedIds);
+            }
+            
+            // 모두 성공한 경우
+            return ApiResponseDto.success(
+                    request.getPlaceIds().size() + "개 장소가 모두 매핑되었습니다", 
+                    mappedIds
+            );
+            
+        } catch (Exception e) {
+            log.error("여행 스타일-장소 매핑 실패: {}", e.getMessage());
             return ApiResponseDto.error(e.getMessage());
         }
     }

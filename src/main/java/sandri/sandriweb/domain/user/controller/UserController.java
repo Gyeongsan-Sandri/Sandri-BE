@@ -282,5 +282,97 @@ public class UserController {
             return ResponseEntity.badRequest().body(response);
         }
     }
+    
+    @GetMapping("/travel-style/{travelStyle}/places")
+    @Operation(
+            summary = "여행 스타일별 장소 목록 조회",
+            description = "여행 스타일(tourtype)에 매핑된 장소 목록을 조회합니다. 각 장소의 이름과 썸네일 사진을 반환합니다. " +
+                         "가능한 여행 스타일: ADVENTURER(모험왕), SENSITIVE_FAIRY(감성요정), HOTSPOT_HUNTER(핫플 헌터), " +
+                         "LOCAL(현지인), THOROUGH_PLANNER(철저 플래너), HEALING_TURTLE(힐링 거북이), " +
+                         "WALKER(산책가), GALLERY_PEOPLE(갤러리피플)"
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "400", description = "잘못된 여행 스타일")
+    })
+    public ResponseEntity<ApiResponseDto<List<TravelStylePlaceResponseDto>>> getPlacesByTravelStyle(
+            @Parameter(
+                    description = "여행 스타일",
+                    example = "ADVENTURER",
+                    required = true,
+                    schema = @Schema(
+                            type = "string",
+                            allowableValues = {
+                                    "ADVENTURER", "SENSITIVE_FAIRY", "HOTSPOT_HUNTER", "LOCAL",
+                                    "THOROUGH_PLANNER", "HEALING_TURTLE", "WALKER", "GALLERY_PEOPLE"
+                            }
+                    )
+            )
+            @PathVariable String travelStyle) {
+        
+        log.info("여행 스타일별 장소 목록 조회 요청: travelStyle={}", travelStyle);
+        
+        try {
+            // String을 TravelStyle enum으로 변환
+            User.TravelStyle travelStyleEnum;
+            try {
+                travelStyleEnum = User.TravelStyle.valueOf(travelStyle.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponseDto.error("잘못된 여행 스타일입니다: " + travelStyle));
+            }
+            
+            ApiResponseDto<List<TravelStylePlaceResponseDto>> response = 
+                    userService.getPlacesByTravelStyle(travelStyleEnum);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("여행 스타일별 장소 목록 조회 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponseDto.error("장소 목록 조회 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+    
+    @PostMapping("/travel-style/places")
+    @Operation(
+            summary = "여행 스타일에 장소 매핑",
+            description = "여행 스타일(tourtype)에 장소를 매핑합니다. 같은 여행 스타일과 장소의 중복 매핑은 불가능합니다. " +
+                         "가능한 여행 스타일: ADVENTURER(모험왕), SENSITIVE_FAIRY(감성요정), HOTSPOT_HUNTER(핫플 헌터), " +
+                         "LOCAL(현지인), THOROUGH_PLANNER(철저 플래너), HEALING_TURTLE(힐링 거북이), " +
+                         "WALKER(산책가), GALLERY_PEOPLE(갤러리피플)",
+            requestBody = @RequestBody(
+                    description = "여행 스타일-장소 매핑 정보",
+                    required = true,
+                    content = @Content(
+                            schema = @Schema(implementation = MapTravelStylePlaceRequestDto.class),
+                            examples = @ExampleObject(
+                                    name = "여행 스타일-장소 매핑 예제",
+                                    value = "{\n  \"travelStyle\": \"ADVENTURER\",\n  \"placeId\": 1\n}"
+                            )
+                    )
+            )
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "매핑 성공"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 (장소 없음, 이미 매핑됨)"),
+            @ApiResponse(responseCode = "401", description = "인증 필요")
+    })
+    public ResponseEntity<ApiResponseDto<Long>> mapPlaceToTravelStyle(
+            @Valid @org.springframework.web.bind.annotation.RequestBody MapTravelStylePlaceRequestDto request,
+            Authentication authentication) {
+        
+        String username = authentication.getName();
+        log.info("여행 스타일-장소 매핑 요청: 사용자={}, travelStyle={}, placeId={}", 
+                username, request.getTravelStyle(), request.getPlaceId());
+        
+        ApiResponseDto<Long> response = userService.mapPlaceToTravelStyle(request);
+        
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
 
 }
