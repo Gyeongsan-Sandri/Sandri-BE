@@ -52,5 +52,15 @@ public interface RouteRepository extends JpaRepository<Route, Long> {
            "AND r.startDate <= :today " +
            "AND r.endDate >= :today")
     List<Route> findTodayRoutesByUserId(@Param("userId") Long userId, @Param("today") LocalDate today);
+
+    /**
+     * 여러 ID로 루트 조회 (creator를 fetch join하여 N+1 문제 방지)
+     * @param routeIds 루트 ID 목록
+     * @return 루트 목록
+     */
+    @Query("SELECT DISTINCT r FROM Route r " +
+           "LEFT JOIN FETCH r.creator " +
+           "WHERE r.id IN :routeIds")
+    List<Route> findAllByIdWithCreator(@Param("routeIds") List<Long> routeIds);
 }
 

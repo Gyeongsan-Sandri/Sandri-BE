@@ -450,8 +450,8 @@ public class RouteService {
 
     /**
      * Google Places 정보로 Place 생성
+     * 호출하는 메서드의 트랜잭션을 사용합니다 (@Transactional이 private 메서드에서는 동작하지 않음)
      */
-    @Transactional
     private Place createPlaceFromGooglePlaces(AddLocationRequestDto.GooglePlaceInfo googlePlaceInfo) {
         // 이름과 좌표 필수 검증
         if (googlePlaceInfo.getName() == null || googlePlaceInfo.getName().trim().isEmpty()) {
@@ -711,7 +711,7 @@ public class RouteService {
         int fetchSize = Math.min(Math.max(limit, 1), 20);
 
         List<Object[]> ranking = userRouteRepository.findHotRoutes(fetchSize, HOT_RECENT_DAYS, HOT_ALPHA);
-        log.info("HOT 루트 쿼리 결과: {} 개", ranking.size());
+        log.info("HOT 루트 쿼리 결과: {} 개 (요청한 limit: {})", ranking.size(), fetchSize);
         if (ranking.isEmpty()) {
             log.warn("HOT 루트 없음 - 공개 루트가 없거나 좋아요가 없습니다");
             return List.of();
@@ -720,9 +720,11 @@ public class RouteService {
         List<Long> routeIds = ranking.stream()
                 .map(row -> ((Number) row[0]).longValue())
                 .collect(Collectors.toList());
+        log.info("HOT 루트 ID 목록: {}", routeIds);
 
-        Map<Long, Route> routeMap = routeRepository.findAllById(routeIds).stream()
+        Map<Long, Route> routeMap = routeRepository.findAllByIdWithCreator(routeIds).stream()
                 .collect(Collectors.toMap(Route::getId, route -> route));
+        log.info("조회된 루트 개수: {} / 요청한 ID 개수: {}", routeMap.size(), routeIds.size());
 
         List<HotRouteDto> hotRoutes = new ArrayList<>();
         int rank = 1;
@@ -758,6 +760,7 @@ public class RouteService {
             }
         }
 
+        log.info("최종 반환할 HOT 루트 개수: {} (요청한 limit: {})", hotRoutes.size(), limit);
         return hotRoutes;
     }
 }
