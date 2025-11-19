@@ -77,6 +77,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/advertise/**").permitAll() // 광고 조회는 인증 없이 가능
                         .requestMatchers("/api/magazines/**").permitAll() // 매거진 조회는 인증 없이 가능
                         .requestMatchers("/api/me/files").permitAll() // Presigned URL 발급은 인증 없이 가능
+                        // 검색 관련 API - 로그인 없이 접근 가능
+                        .requestMatchers("/api/popular-searches").permitAll() // 인기 검색어 조회
+                        .requestMatchers("/api/categories").permitAll() // 카테고리 목록 조회
+                        .requestMatchers("/api/me/recent-searches").permitAll() // 최근 검색어 조회 (로그인 없이도 가능)
                         .requestMatchers("/api/me/**").authenticated() // 나머지 마이페이지 관련 API는 인증 필요
                         .requestMatchers("/api/admin/**").permitAll() // 관리자 API는 인증 없이 가능 (더 구체적인 경로 이후에 배치)
                         .requestMatchers("/api/routes/share/**").permitAll()
