@@ -1,5 +1,6 @@
 package sandri.sandriweb.domain.route.service;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -607,6 +608,7 @@ public class RouteService {
             }
             
             String shareUrl = baseUrl + "/routes/share/" + route.getShareCode();
+            log.info("공유 링크 생성: baseUrl={}, shareCode={}, shareUrl={}", baseUrl, route.getShareCode(), shareUrl);
             String qrCodeBase64 = QrCodeGenerator.generateQrCodeBase64(shareUrl);
             
             ShareLinkResponseDto response = ShareLinkResponseDto.of(
