@@ -28,6 +28,9 @@ spring:
 server:
   tomcat:
     max-swallow-size: 100MB # Tomcat이 삼킬 수 있는 최대 요청 본문 크기
+  servlet:
+    session:
+      timeout: 24h
 
 springdoc:
   api-docs:

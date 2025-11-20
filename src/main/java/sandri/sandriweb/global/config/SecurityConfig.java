@@ -138,6 +138,7 @@ public class SecurityConfig {
         serializer.setSameSite("None");
         serializer.setUseSecureCookie(true); // HTTPS 환경에서만 쿠키 전송
         serializer.setUseHttpOnlyCookie(true); // XSS 공격 방지
+        serializer.setCookieMaxAge(86400); // 24시간 (초 단위: 24 * 60 * 60 = 86400)
         return serializer;
     }
 }
