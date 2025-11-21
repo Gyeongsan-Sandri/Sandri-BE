@@ -137,13 +137,14 @@ public class VisitHistoryController {
             List<TodayRoutePlaceDto> response = visitHistoryService.getTodayRoutePlaces(user);
             return ResponseEntity.ok(ApiResponseDto.success(response));
         } catch (RuntimeException e) {
-            log.error("오늘 일정 장소 조회 실패: {}", e.getMessage());
-            if (e.getMessage().contains("찾을 수 없습니다")) {
+            log.error("오늘 일정 장소 조회 실패: {}", e.getMessage(), e);
+            String errorMessage = e.getMessage() != null ? e.getMessage() : "오늘 일정 장소 조회 중 오류가 발생했습니다";
+            if (errorMessage.contains("찾을 수 없습니다")) {
                 return ResponseEntity.status(404)
-                        .body(ApiResponseDto.error(e.getMessage()));
+                        .body(ApiResponseDto.error(errorMessage));
             }
             return ResponseEntity.badRequest()
-                    .body(ApiResponseDto.error(e.getMessage()));
+                    .body(ApiResponseDto.error(errorMessage));
         } catch (Exception e) {
             log.error("오늘 일정 장소 조회 중 오류 발생: ", e);
             return ResponseEntity.badRequest()

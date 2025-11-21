@@ -247,8 +247,24 @@ public class VisitHistoryService {
         List<Route> todayRoutes = routeRepository.findTodayRoutesByUserId(user.getId(), today);
 
         if (todayRoutes.isEmpty()) {
-            log.info("오늘 날짜에 해당하는 루트가 없습니다: userId={}", user.getId());
+            log.warn("오늘 날짜에 해당하는 루트가 없습니다: userId={}, today={}", user.getId(), today);
+            
+            // 디버깅: 사용자의 모든 루트 조회하여 날짜 확인
+            List<Route> allUserRoutes = routeRepository.findByParticipantOrCreator(user);
+            log.info("사용자의 전체 루트 개수: {}", allUserRoutes.size());
+            for (Route route : allUserRoutes) {
+                log.info("루트 정보: routeId={}, title={}, startDate={}, endDate={}, 오늘 포함 여부={}", 
+                        route.getId(), route.getTitle(), route.getStartDate(), route.getEndDate(),
+                        !route.getStartDate().isAfter(today) && !route.getEndDate().isBefore(today));
+            }
+            
             return List.of();
+        }
+        
+        log.info("오늘 날짜에 해당하는 루트 개수: {}", todayRoutes.size());
+        for (Route route : todayRoutes) {
+            log.info("오늘 일정 루트: routeId={}, title={}, startDate={}, endDate={}", 
+                    route.getId(), route.getTitle(), route.getStartDate(), route.getEndDate());
         }
 
         // 2. 모든 루트의 오늘 날짜 장소 목록 수집
@@ -265,8 +281,21 @@ public class VisitHistoryService {
                     .findByRouteAndDayNumberOrderByDisplayOrderAsc(route, todayDayNumber);
 
             if (!todayLocations.isEmpty()) {
-                // 루트의 총 장소 개수
-                int totalPlaceCount = route.getLocations().size();
+                // 루트의 총 장소 개수 (LAZY 로딩이므로 안전하게 처리)
+                int totalPlaceCount = 0;
+                try {
+                    List<RouteLocation> allRouteLocations = route.getLocations();
+                    if (allRouteLocations != null) {
+                        totalPlaceCount = allRouteLocations.size();
+                    } else {
+                        // LAZY 로딩이 초기화되지 않은 경우, routeLocationRepository로 조회
+                        totalPlaceCount = routeLocationRepository.findByRoute(route).size();
+                    }
+                } catch (Exception e) {
+                    log.warn("루트의 총 장소 개수 조회 실패, routeLocationRepository로 재조회: routeId={}, error={}", 
+                            route.getId(), e.getMessage());
+                    totalPlaceCount = routeLocationRepository.findByRoute(route).size();
+                }
                 
                 // 각 장소에 총 개수 매핑
                 for (RouteLocation location : todayLocations) {
@@ -286,17 +315,32 @@ public class VisitHistoryService {
                 .map(RouteLocation::getName)
                 .collect(Collectors.toSet());
 
+        log.info("오늘 일정 장소 이름 목록: {}", placeNames);
+
         // Place 일괄 조회 (N+1 문제 해결)
         List<Place> places = placeRepository.findByNameIn(placeNames);
+        
+        log.info("조회된 Place 개수: {}, 요청한 이름 개수: {}", places.size(), placeNames.size());
         
         // Place 이름으로 매핑 (name -> Place)
         Map<String, Place> placeByNameMap = places.stream()
                 .collect(Collectors.toMap(Place::getName, place -> place, (existing, replacement) -> existing));
 
+        // 조회되지 않은 장소 이름 로깅
+        Set<String> foundPlaceNames = placeByNameMap.keySet();
+        Set<String> notFoundPlaceNames = placeNames.stream()
+                .filter(name -> !foundPlaceNames.contains(name))
+                .collect(Collectors.toSet());
+        if (!notFoundPlaceNames.isEmpty()) {
+            log.warn("Place를 찾을 수 없는 RouteLocation 이름들: {}", notFoundPlaceNames);
+        }
+
         // 4. Place ID 목록 추출하여 사진 URL 배치 조회 (N+1 문제 해결)
         List<Long> placeIds = placeByNameMap.values().stream()
                 .map(Place::getId)
                 .collect(Collectors.toList());
+
+        log.info("사진 URL 조회할 Place ID 개수: {}", placeIds.size());
 
         Map<Long, String> photoUrlByPlaceId = getPhotoUrlByPlaceIds(placeIds);
 
@@ -308,7 +352,7 @@ public class VisitHistoryService {
                 ));
 
         // 6. DTO 변환
-        return allTodayLocations.stream()
+        List<TodayRoutePlaceDto> result = allTodayLocations.stream()
                 .map(location -> {
                     String placeName = location.getName();
                     String thumbnail = photoUrlByNameMap.getOrDefault(placeName, null);
@@ -320,13 +364,23 @@ public class VisitHistoryService {
                             .address(location.getAddress())
                             .build();
 
+                    Integer totalPlaceCount = locationToTotalCountMap.get(location);
+                    if (totalPlaceCount == null) {
+                        log.warn("totalPlaceCount가 null입니다. locationId={}, routeId={}", 
+                                location.getId(), location.getRoute().getId());
+                        totalPlaceCount = 0;
+                    }
+
                     return TodayRoutePlaceDto.builder()
                             .placeInfo(placeInfo)
-                            .totalPlaceCount(locationToTotalCountMap.get(location))
+                            .totalPlaceCount(totalPlaceCount)
                             .visitOrder(location.getDisplayOrder())
                             .build();
                 })
                 .collect(Collectors.toList());
+
+        log.info("오늘 일정 장소 DTO 변환 완료: 총 {}개", result.size());
+        return result;
     }
 
     /**

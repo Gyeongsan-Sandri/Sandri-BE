@@ -75,7 +75,8 @@ public class RouteService {
                     .imageUrl(imageUrl)
                     .build();
             
-            log.info("루트 엔티티 생성: 제목={}, 공개여부={}", route.getTitle(), route.isPublic());
+            log.info("루트 엔티티 생성: 제목={}, 공개여부={}, startDate={}, endDate={}", 
+                    route.getTitle(), route.isPublic(), route.getStartDate(), route.getEndDate());
             
             // 위치 정보 추가
             if (request.getLocations() != null && !request.getLocations().isEmpty()) {
@@ -100,6 +101,9 @@ public class RouteService {
             }
             
             Route savedRoute = routeRepository.save(route);
+            
+            log.info("루트 저장 완료: routeId={}, startDate={}, endDate={}", 
+                    savedRoute.getId(), savedRoute.getStartDate(), savedRoute.getEndDate());
             
             // 생성자를 일행에 추가
             RouteParticipant creatorParticipant = RouteParticipant.create(savedRoute, creator);
