@@ -345,10 +345,14 @@ public class VisitHistoryService {
         Map<Long, String> photoUrlByPlaceId = getPhotoUrlByPlaceIds(placeIds);
 
         // 5. Place 이름으로 사진 URL 매핑 (name -> photoUrl)
+        // Collectors.toMap()은 null 값을 허용하지 않으므로, null 대신 빈 문자열 사용
         Map<String, String> photoUrlByNameMap = placeByNameMap.entrySet().stream()
                 .collect(Collectors.toMap(
                         Map.Entry::getKey,
-                        entry -> photoUrlByPlaceId.getOrDefault(entry.getValue().getId(), null)
+                        entry -> {
+                            String photoUrl = photoUrlByPlaceId.getOrDefault(entry.getValue().getId(), null);
+                            return photoUrl != null ? photoUrl : "";
+                        }
                 ));
 
         // 6. DTO 변환
